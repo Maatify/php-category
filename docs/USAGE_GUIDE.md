@@ -22,13 +22,10 @@ application layer.
 
 ## Installation and prerequisites
 
-The canonical Composer package name is `maatify/php-category`. The target
-`v1.0.0-rc.1` is still unpublished and not externally Composer-resolvable; use
-the command only after an approved release is actually available from a
-Composer source:
+Install the `v1.0.0-rc.1` Release Candidate using its exact Composer version:
 
 ```bash
-composer require maatify/php-category
+composer require maatify/php-category:1.0.0-rc.1
 ```
 
 The runtime contract requires PHP `^8.4`, `ext-mbstring`, `ext-pdo`,

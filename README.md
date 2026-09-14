@@ -17,16 +17,13 @@ Framework-neutral hierarchical categories, contents, extensible Host-defined
 content fields, a Category-owned Image Role registry, and Category-owned image assignments for reusable PHP
 applications.
 
-**Target:** `v1.0.0-rc.1`
+**Version:** `v1.0.0-rc.1`
 
-**State:** RC publication preparation / pre-publication readiness
+**Release status:** Release Candidate (Pre-Stable)
 
-The target RC has not been published and is not externally Composer-resolvable.
-The public API remains subject to pre-publication validation; no Stable
-compatibility or supported Stable line is claimed. After owner-approved
-publication, the Consumer Verification Harness and at least two independent
-Real Host validations must use this same published RC before the first Stable
-release.
+No Stable compatibility or supported Stable line is claimed. Before the first
+Stable release, the Consumer Verification Harness and at least two independent
+Real Host validations must use this exact RC.
 
 </div>
 
@@ -200,15 +197,10 @@ visibility.
 
 ## Installation
 
-The target `v1.0.0-rc.1` remains a pre-publication target after umbrella PR #48
-merges; tagging, release, and distribution publication require a separate
-owner-approved release action. It has not been tagged, published to Packagist,
-or made externally Composer-resolvable. The command below records the canonical
-package identity only; it becomes usable after an actual approved publication
-to a Composer source and does not install the current unpublished target.
+Install the `v1.0.0-rc.1` Release Candidate with Composer:
 
 ```bash
-composer require maatify/php-category
+composer require maatify/php-category:1.0.0-rc.1
 ```
 
 A branch, repository checkout, local path, or VCS source is not a published RC
@@ -297,8 +289,7 @@ composer test:integration
 composer test
 ```
 
-This pre-publication state does not publish a tag, GitHub Release, or Packagist
-version. Final Acceptance of the RC.1 readiness boundary does not mean Stable
+This Release Candidate is pre-Stable; RC readiness does not mean Stable
 readiness.
 
 ## License

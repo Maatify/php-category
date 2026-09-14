@@ -5,26 +5,24 @@
 
 ## Scope
 
-**State:** Development / Pre-Publication Preparation
+**State:** Release Candidate (Pre-Stable)
 
-**Target:** `v1.0.0-rc.1` (unpublished)
+**Version:** `v1.0.0-rc.1`
 
-This policy covers the package's development state and its package-owned
-runtime contracts, Composer metadata, schema, and CI configuration. The target
-RC has not been tagged, released, or published and is not externally
-Composer-resolvable. This is not a Published SemVer RC state. Host applications,
-Host-owned tables, and integrations outside this repository are not maintained
-by this package.
+This policy covers package-owned runtime contracts, Composer metadata, schema,
+and CI configuration. This pre-release does not establish a supported Stable
+release line. Host applications, Host-owned tables, and integrations outside
+this repository are not maintained by this package.
 
 ## Supported Versions
 
-No Stable release line is currently supported. The `v1.0.0-rc.1` entry below
-is an unpublished target only and creates no support commitment.
+No Stable release line is currently supported. The Release Candidate does not
+create a Stable support commitment.
 
 | Version | Support status |
 |---------|-----------------|
-| `v1.0.0-rc.1` target (unpublished) | Not a published or supported release |
-| Published Stable release lines | None |
+| `v1.0.0-rc.1` | Pre-release; not a supported Stable release |
+| Stable release lines | None |
 
 ## Reporting a Vulnerability
 
