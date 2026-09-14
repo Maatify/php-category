@@ -1,6 +1,12 @@
 # Maatify Composer Package Standard
 
-**Maatify Standalone PHP Composer Library Standard — v1.1**
+**Maatify Standalone PHP Composer Library Standard**
+
+## Standard Metadata
+
+- **Standard ID:** `std-composer-package`
+- **Standard Version:** `1.2.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
 
 This document defines the canonical `composer.json` contract for standalone, reusable PHP libraries in the Maatify ecosystem.
 
@@ -65,6 +71,8 @@ It does **not** govern:
 - `COMPOSER_PACKAGE_STANDARD.md` governs `composer.json` as the package metadata, dependency, autoload, scripts, configuration, and distribution contract.
 - `CI_WORKFLOW_STANDARD.md` governs how Composer contracts are verified through strict validation, dependency resolution, platform checks, audit, and quality gates.
 - `LIBRARY_PRESENTATION_STANDARD.md` governs public presentation and consistency between Composer metadata, README, Packagist, and GitHub.
+
+The definition and evidence for a package/version being Published are owned by [`LIBRARY_PRESENTATION_STANDARD.md` Section 14](LIBRARY_PRESENTATION_STANDARD.md#14-first-stable-release-lifecycle-and-security-presentation-states). This Standard consumes that publication state when applying package identity rules and MUST NOT establish a conflicting publication source or definition.
 
 No Standard SHOULD duplicate the detailed rules owned by another Standard. Cross-references MUST be used instead.
 
@@ -139,7 +147,7 @@ Templates in this Standard use the following placeholders:
 - `{RUNTIME_EXTENSION_NAME}`: A directly required PHP extension name without the `ext-` prefix.
 - `{RUNTIME_PACKAGE_NAME}`: A direct runtime package in `vendor/package` form.
 - `{RUNTIME_PACKAGE_CONSTRAINT}`: The approved stable constraint for a runtime package.
-- `{PHPUNIT_CONSTRAINT}`: The latest stable PHPUnit constraint compatible with the supported PHP range.
+- `{PHPUNIT_CONSTRAINT}`: The latest stable PHPUnit constraint compatible with the supported PHP range, used only in PHPUnit-specific illustrative examples.
 - `{PHPSTAN_CONSTRAINT}`: The latest stable PHPStan constraint.
 - `{CS_FIXER_CONSTRAINT}`: The approved PHP CS Fixer constraint.
 - `{README_FILE}`: A non-default README path when the package intentionally does not use `README.md`.
@@ -211,7 +219,9 @@ Rules:
 - Underscores SHOULD NOT be used even though Composer may accept them.
 - The slug MUST reflect the library's actual responsibility.
 
-For every new or Pre-Stable Maatify PHP package:
+For package-identity applicability, a Pre-Stable package identity is a `Published Pre-Stable identity` when at least one exact Pre-Stable version under the same Composer package name being assessed has previously attained Published state as defined by [LIBRARY_PRESENTATION_STANDARD.md Section 14](LIBRARY_PRESENTATION_STANDARD.md#14-first-stable-release-lifecycle-and-security-presentation-states). The version currently under development, including the version represented by repository `HEAD`, does not itself need to be Published. Publication under Section 14 remains specific to the exact package identity and version; this section uses the existence of at least one such previously Published version under the same Composer package name to determine identity-level applicability.
+
+For every new Maatify PHP package and every Pre-Stable package identity that is not a Published Pre-Stable identity under this definition, the current naming policy below applies in full:
 
 Here, `{domain}` is the package's lowercase `kebab-case` domain slug under the rules above.
 
@@ -219,6 +229,23 @@ Here, `{domain}` is the package's lowercase `kebab-case` domain slug under the r
 - When the package has its own repository, its repository slug MUST be exactly `php-{domain}`.
 - The same lowercase `kebab-case` `{domain}` slug MUST be used in both identities, so the Composer package slug MUST match the dedicated repository slug exactly.
 - `php-` MUST prefix the repository slug and the package slug after `maatify/`; alternative placement, distribution exceptions, and documented deviations are not permitted.
+
+For a Published Pre-Stable identity, its current Composer package name and repository identity remain subject to assessment against the current naming requirements in this section, including `maatify/php-{domain}` and the matching `php-{domain}` repository slug when applicable. Publication alone MUST NOT make an identity compliant, grandfathered, or permanently exempt. Published state changes only the decision process for a proposed identity migration or rename; it MUST NOT alter the current-compliance assessment. Publication also MUST NOT create an automatic preservation entitlement for an identity that does not meet current policy.
+
+When a Published Pre-Stable identity does not meet current naming policy, this Standard MUST NOT trigger an automatic breaking rename solely to correct that mismatch. Before any rename affecting its Composer package name or repository identity, the required path is:
+
+```text
+Published Pre-Stable Identity Detected
+→ Downstream Impact Review
+→ Owner Decision
+→ Approved Action
+```
+
+The downstream impact review MUST identify, where applicable, whether the current identity is actually externally consumable; what a Composer package identity change and a repository identity change could affect; any consumer, distribution, or install-contract references that could break; and the evidence the Owner will use to decide whether to retain, migrate, or rename the identity. This review does not prescribe an alias, `replace` rule, deprecation timeline, migration release, redirect, or consumer-specific action. The Standard does not predetermine the Owner's decision.
+
+A claim that a package violated a naming requirement when it was historically created or published MUST be supported by authoritative evidence that the requirement existed, was authoritative, and applied to that artifact at that time. Without that evidence, there MUST be `NO RETROACTIVE VIOLATION CLAIM`. This does not make an identity compliant with current policy.
+
+When the current decision can be made from the package's current state, publication state, downstream impact, and current policy, historical archaeology is not required. If the decision actually depends on an unproven historical fact and cannot be resolved without it, the result is `OWNER DECISION REQUIRED`; historical facts MUST NOT be inferred.
 
 A Stable published PHP package and its repository MUST retain their existing identities unless a separate migration, compatibility, and distribution decision approves a rename. This Standard MUST NOT trigger an automatic rename of a Stable published package.
 
@@ -570,6 +597,8 @@ The `require-dev` field is reserved for direct development, analysis, formatting
 
 Common categories include:
 
+The following is an illustrative dependency set for a repository that actually uses PHPUnit and installs it through Composer. It is not a universal tool list; each repository MUST declare only the tools it actually uses.
+
 ```json
 "require-dev": {
   "friendsofphp/php-cs-fixer": "{CS_FIXER_CONSTRAINT}",
@@ -580,13 +609,15 @@ Common categories include:
 
 Rules:
 
-- Every tool executed directly by repository scripts or CI MUST be declared directly.
-- The repository MUST NOT rely on a transitive installation of a tool.
+- Every test runner, framework, or other tool executed directly by repository scripts or CI MUST be declared as a direct development dependency when Composer is the means by which the repository installs it.
+- A tool that is not installed through Composer MUST NOT be given a fictitious Composer dependency; its provisioning, versioning, and execution MUST instead be deterministic and repository-owned under the CI contract.
+- The repository MUST NOT rely on a transitive installation of a directly executed tool.
 - Development tools MUST NOT be placed in `require`.
 - Runtime dependencies MUST NOT be placed only in `require-dev`.
 - Tool constraints MUST remain compatible with the minimum supported PHP version when the tool runs there.
 - An unused tool or a tool with no maintained configuration MUST be removed.
-- PHPUnit MUST be declared directly in `require-dev` when the repository contains testable behavior/tests and MUST use the latest stable version compatible with the repository's declared PHP contract.
+- A repository with testable behavior or maintained tests MUST maintain a reproducible test-execution strategy; its declared dependencies and maintained configuration MUST match the runner and tooling actually used.
+- PHPUnit MAY be selected as the repository's test runner. When selected and installed through Composer, it MUST be declared directly in `require-dev` with a constraint compatible with the repository's declared PHP contract. PHPUnit is not universally required.
 - PHPStan is REQUIRED by the Maatify package quality profile and MUST use the latest stable version compatible with the repository's declared PHP contract.
 - `dg/bypass-finals` MAY be used as a development-only test tool when a repository has a legitimate documented need to test/mock concrete final classes and that choice is consistent with its test architecture. When used, it belongs in `require-dev`.
 - A code-style tool is REQUIRED when formatting is an enforced repository check.
@@ -779,7 +810,7 @@ Canonical script names, when the corresponding capability exists, are:
 - `test:regression` runs the Regression suite.
 - `test:integration` runs the Integration suite.
 
-Example:
+Example for a repository whose actual test runner is PHPUnit; other maintained runner commands MUST be represented by the repository's actual scripts and configuration:
 
 ```json
 "scripts": {
@@ -1054,7 +1085,7 @@ This template contains no empty fields:
 
 ### 28.2 Test-Enabled Extension
 
-Add only when test classes and direct development tools exist:
+The following is an optional example for a repository that selects PHPUnit as its actual test runner and installs it through Composer. PHPUnit is not a universal requirement; when a repository uses different tooling, its direct dependencies and script commands MUST reflect that actual tooling.
 
 ```json
 {
@@ -1150,7 +1181,8 @@ Automated verification of latest dependencies, lowest dependencies, platform req
 
 - [ ] Package name uses the `maatify` vendor.
 - [ ] Package name is lowercase and uses `kebab-case`.
-- [ ] A new or Pre-Stable package uses Composer name `maatify/php-{domain}` and, when it has its own repository, repository slug `php-{domain}`; no documented deviation is permitted.
+- [ ] A new package, or a Pre-Stable package identity for which no exact Pre-Stable version under that same Composer package name has ever attained Published state, uses Composer name `maatify/php-{domain}` and, when it has its own repository, repository slug `php-{domain}`; no documented deviation is permitted. Version publication is determined by Library Presentation Standard §14.
+- [ ] A Published Pre-Stable identity is assessed against current naming policy, is not compliant or preserved solely because it was published, and is not renamed before downstream impact review and an Owner Decision.
 - [ ] A Stable published package and its repository retain their existing identities unless a separate migration, compatibility, and distribution decision approves a rename.
 - [ ] Description accurately states the current package purpose.
 - [ ] Keywords are focused, relevant, lowercase, and non-duplicated.

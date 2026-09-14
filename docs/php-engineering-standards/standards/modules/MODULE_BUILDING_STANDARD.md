@@ -1,6 +1,11 @@
 # MODULE_BUILDING_STANDARD
 
-**Maatify Base Module Profile — v1.3**
+## Standard Metadata
+
+- **Standard ID:** `std-module-building`
+- **Standard Version:** `1.0.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 This document defines the law for building any new standalone Base Module in the Maatify ecosystem.
 
 ---

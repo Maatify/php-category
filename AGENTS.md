@@ -89,3 +89,23 @@ Squash Merge إلى الـPhase Draft وفق Standing Execution Authority الم
 
 لغة التعاون والتقارير العربية افتراضيًا، مع إبقاء أسماء الملفات والأوامر وGit
 SHAs والمصطلحات التقنية بصيغتها الأصلية عند الحاجة للدقة.
+
+## 6. سياسة RC Hardening المحلية
+
+في هذه المكتبة، يعمل المساعد القائد بصفته Technical Lead / Architect / Reviewer
+/ Coordinator: يعيد بناء الحالة، ويحدد الفجوات والنطاق، ويوجه المنفذ، ويراجع
+التغييرات والأدلة، ويطلب الإصلاحات، ويدير بيانات PR، ويعتمد Child Work Unit
+ويدير Squash Merge إلى Phase Draft. لا ينفذ بنفسه محتوى المستودع بدل المنفذ.
+
+أي Work Unit تنتج تغييرًا مستودعيًا في RC Hardening تتبع المسار:
+
+```text
+Phase Draft → fresh child branch → Draft Child PR targeting Phase Draft
+→ implementation → review/fixes → verification → acceptance
+→ Squash Merge to Phase Draft
+```
+
+يُمنع commit مباشر على Phase Draft، أو Child PR إلى `main`، أو دمج Work Unit
+غير مكتملة، أو اعتبار Verification بديلًا عن Acceptance، أو إنشاء umbrella
+Draft جديدة بدل PR #48 القائمة. يظل دمج Phase Draft إلى `main` قرارًا مستقلًا
+للمالك.
