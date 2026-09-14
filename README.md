@@ -21,7 +21,10 @@ applications.
 
 **Release status:** Release Candidate (Pre-Stable)
 
-**Install after publication:** `composer require maatify/php-category:1.0.0-rc.1`
+**Composer install:** `composer require maatify/php-category:1.0.0-rc.1`
+
+The command resolves only when this exact RC is externally available through the
+approved Composer distribution source.
 
 No Stable compatibility or supported Stable line is claimed. Before the first
 Stable release, the Consumer Verification Harness and at least two independent
