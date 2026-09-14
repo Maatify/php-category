@@ -1,6 +1,13 @@
 # PACKAGE_BUILDING_STANDARD
 
-**Maatify Standalone Composer Package Building Standard — v1.2**
+**Maatify Standalone Composer Package Building Standard**
+
+## Standard Metadata
+
+- **Standard ID:** `std-package-building`
+- **Standard Version:** `1.3.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 This document is the law for building any new standalone Composer package in the Maatify ecosystem.
 Read it fully before writing a single line of code.
 
@@ -845,7 +852,7 @@ No PHPStan baseline, `ignoreErrors`, or inline suppression is permitted merely t
 - Packages that own persistence, database, or external-service behavior MUST define appropriate Integration coverage. Unit and Regression suites remain required where applicable.
 - Package-owned test behavior, fixtures, and suite responsibilities belong to the package architecture and reference documentation.
 - CI execution requirements — including real-service provisioning, MySQL/SQLite enforcement, PHP matrices, cleanup/repeatability checks, and example syntax validation — are governed exclusively by [`CI_WORKFLOW_STANDARD.md`](CI_WORKFLOW_STANDARD.md).
-- Full PHPUnit verification must be part of the appropriate CI quality gate.
+- Package readiness requires the complete maintained and applicable test suite to be covered by the appropriate CI quality gate, using the repository's actual maintained test runner and tooling. CI execution and failure enforcement are governed by [`CI_WORKFLOW_STANDARD.md`](CI_WORKFLOW_STANDARD.md).
 
 ### PDO fetch results — always annotate
 

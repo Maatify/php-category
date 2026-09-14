@@ -2,7 +2,9 @@
 
 ## بيانات المعيار
 
-- **الإصدار:** `2.2.0`
+- **Standard ID:** `std-github-phase-stack-workflow`
+- **Standard Version:** `2.2.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
 - **اللغة المعتمدة:** العربية.
 - **حالة الاعتماد:** يصبح معتمدًا عند دمجه في الفرع الافتراضي للمشروع.
 - **الهدف:** تقليل زمن التسليم الكلي عبر Phase Draft أو Execution Batch وDependency-Aware Execution Train، مع الحفاظ على traceability والمراجعة والاختبارات وجودة `main` دون فرض Branch/PR أو تسلسل إداري لا تدعمه dependencies فعلية.

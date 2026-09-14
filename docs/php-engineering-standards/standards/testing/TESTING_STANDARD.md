@@ -1,6 +1,12 @@
 # TESTING_STANDARD
 
-**Maatify Testing Architecture and Regression Protection Standard — v1.1**
+**Maatify Testing Architecture and Regression Protection Standard**
+
+## Standard Metadata
+
+- **Standard ID:** `std-testing`
+- **Standard Version:** `1.1.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
 
 This document establishes the canonical, repository-wide Testing Standard for the Maatify ecosystem. Its primary purpose is to protect implemented behavior from regressions and unintended damage during future development.
 

@@ -1,5 +1,11 @@
 # CI Workflow Standard
 
+## Standard Metadata
+
+- **Standard ID:** `std-ci-workflow`
+- **Standard Version:** `1.1.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 This document outlines the standard CI workflow architecture for any standalone Composer package in the Maatify ecosystem. It ensures a consistent, high-quality testing and static analysis baseline across all packages without coupling to any specific project.
 
 ## 1. Normative Language
@@ -81,14 +87,14 @@ Examples of relevant paths:
 * `composer.json`
 * `composer.lock`
 * `phpstan.neon`
-* `phpunit.xml` or `phpunit.xml.dist`
+* Actual test-runner configuration files used by the repository (for example, `phpunit.xml` or `phpunit.xml.dist` when PHPUnit is used)
 * `.php-cs-fixer.php`
 * `.github/workflows/<workflow>.yml`
 
 Rules:
 * Include `composer.lock` ONLY when the repository tracks it.
 * Never require a reusable library to add `composer.lock` solely for CI path filtering.
-* Include the actual PHPUnit configuration filename used by the repository.
+* Include the actual test-runner configuration files used by the repository when they affect test execution.
 * Include package-owned schema and SQL fixture paths used by Integration tests.
 * Include the workflow itself and all quality-tool configuration files that affect it.
 * Documentation changes SHOULD trigger heavy checks only when the workflow validates documentation code blocks, generated files, or examples.
@@ -176,7 +182,7 @@ The standard MUST require, where applicable:
   * MUST NOT use inline suppressions merely to make CI pass.
 * **Code style**: When a supported formatter configuration (e.g., `.php-cs-fixer.php`) exists, CI MUST run a non-mutating check (e.g., `vendor/bin/php-cs-fixer fix --dry-run --diff`). CI MUST NEVER rewrite and commit formatting automatically during a required verification job.
 * **Whitespace verification**: CI MUST detect and fail on applicable whitespace defects such as trailing whitespace, malformed whitespace introduced in tracked text/source files, or equivalent repository-specific whitespace integrity failures. A canonical Git-aware verification such as `git diff --check` MAY be documented as an accepted/basic mechanism where appropriate, provided it works correctly for the actual comparison context. This must be treated as a real required quality check, separate from generic code-style formatting.
-* **Full test suite**: Where separate Unit, Regression, and Integration suites exist, run each explicitly. CI MUST also run the complete PHPUnit suite in at least one canonical environment.
+* **Complete maintained applicable test suite**: CI MUST run the complete maintained test suite using the repository's actual test runner and tooling. Where separate Unit, Regression, and Integration suites exist, each MUST run explicitly. A runner failure MUST fail CI deterministically; a missing required runner, configuration, dependency, or setup MUST fail closed.
 * **Example syntax validation**
 * **Composer security audit**
 * **Workflow syntax/lint validation**
@@ -318,7 +324,7 @@ Scheduled dependency-drift verification MAY be added for reusable libraries.
 This standard distinguishes between universal rules and repository-specific values.
 
 * **Universal rules**: PHPStan max, real Integration services, minimum/latest PHP coverage, stable required gates, Composer validation, no hidden failures, least privilege.
-* **Repository-specific values**: exact PHP versions, exact service versions, actual PHPUnit configuration filename, actual suite names, schema paths, environment variable names, service ports, package-owned trigger/table names, whether `composer.lock` is tracked.
+* **Repository-specific values**: exact PHP versions, exact service versions, actual test-runner configuration files, actual suite names, schema paths, environment variable names, service ports, package-owned trigger/table names, whether `composer.lock` is tracked.
 
 Repository-specific values MUST be documented by each package, but MUST NOT be hardcoded into the universal standard.
 
@@ -339,7 +345,7 @@ Any standalone Composer package in the Maatify ecosystem MUST verify the followi
 * [ ] Unit suite passes where applicable
 * [ ] Regression suite passes where applicable
 * [ ] Integration suite uses real services where applicable
-* [ ] full PHPUnit suite passes where PHPUnit/tests are applicable
+* [ ] complete maintained applicable test suite passes using the repository's actual test runner and tooling
 * [ ] example PHP files pass syntax validation where examples exist
 * [ ] minimum supported PHP is tested
 * [ ] latest supported PHP is tested

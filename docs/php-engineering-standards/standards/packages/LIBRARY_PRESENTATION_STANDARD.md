@@ -1,5 +1,11 @@
 # Maatify PHP Library Repository Presentation Standard
 
+## Standard Metadata
+
+- **Standard ID:** `std-library-presentation`
+- **Standard Version:** `1.0.1`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 ## 1. Normative Language
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHOULD", "SHOULD NOT", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
@@ -330,6 +336,8 @@ They are NOT automatically added to:
 Unless a subsequent decision alters this Standard.
 
 ## 14. First Stable Release Lifecycle and SECURITY Presentation States
+
+**Publication State Definition:** For this Standard and cross-Standard use, a package/version is Published only when that exact package identity and exact version are externally resolvable and installable by an external consumer through an actual recognized Composer distribution source. Packagist MAY be such a source, but it is not the only possible source. A branch, commit, tag, GitHub Release, Draft PR, successful CI run, local path repository, documentation claim, or Git tag without evidence of external Composer resolution and installation does not by itself establish Published state. This definition clarifies publication state and does not replace or weaken the release lifecycle, exact tagged RC installation, Consumer Verification Harness, two independent Real Host validations, release evidence, or owner release authorization below.
 
 ### 14.1 First Stable Release Gate
 

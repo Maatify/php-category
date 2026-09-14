@@ -2,7 +2,9 @@
 
 ## بيانات المعيار
 
-- **الإصدار:** `5.3.0`
+- **Standard ID:** `std-ai-collaboration-workflow`
+- **Standard Version:** `6.0.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
 - **اللغة المعتمدة:** العربية.
 - **حالة الاعتماد:** يصبح معتمدًا عند دمجه في الفرع الافتراضي للمشروع.
 - **مالك المعيار:** مالك المشروع.
@@ -1106,11 +1108,9 @@ Fix verification != final acceptance review
 
 # 16. حوكمة التعديل والإصدار
 
-## 16.1 متى يتغير الإصدار
+## 16.1 Standard Versioning
 
-- Patch: تصحيح صياغة لا يغير السلوك.
-- Minor: إضافة قاعدة أو بوابة متوافقة مع الأدوار الحالية.
-- Major: تغيير توزيع الأدوار أو صلاحيات القرار أو نموذج Git الأساسي.
+تخضع هوية هذا المعيار وStandard Version وتصنيف أثر تغييره حصريًا لـ[STANDARD_VERSIONING_POLICY_AR.md](../governance/STANDARD_VERSIONING_POLICY_AR.md). يطبق أي تعديل تصنيف `Change Nature` و`Compatibility Impact` وقاعدة الانتقال المحددة في السياسة المركزية.
 
 ## 16.2 متطلبات تعديل المعيار
 
@@ -1119,7 +1119,7 @@ Fix verification != final acceptance review
 - يحصل على موافقة صريحة من مالك المشروع.
 - يمر عبر branch وPR قابلين للمراجعة ما لم يقرر المالك غير ذلك.
 - يوضح سبب التغيير وأثره.
-- يحدّث رقم الإصدار عند الحاجة.
+- يثبت أو يحدّث Standard Version وفق تصنيف الأثر ومسار Version Finalization المحددين في [STANDARD_VERSIONING_POLICY_AR.md](../governance/STANDARD_VERSIONING_POLICY_AR.md).
 - يراجع `AGENTS.md` للتأكد من عدم وجود تكرار أو تعارض.
 
 ---
