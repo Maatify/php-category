@@ -1,4 +1,4 @@
-# Maatify/category Standards Manifest
+# Maatify/php-category Standards Manifest
 
 This file is the local resolver record for the repository's selective pinned
 adoption. It records composition and provenance; the underlying standards and

@@ -1,6 +1,6 @@
 {
-  "name": "maatify/category-standalone-consumer",
-  "description": "CI-only external consumer for maatify/category.",
+  "name": "maatify/php-category-standalone-consumer",
+  "description": "CI-only external consumer for maatify/php-category.",
   "type": "project",
   "license": "MIT",
   "require": {

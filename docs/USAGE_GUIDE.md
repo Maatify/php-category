@@ -1,13 +1,13 @@
 # Category Consumer Usage Guide
 
-This guide is for a Host application consuming `maatify/category` through its
+This guide is for a Host application consuming `maatify/php-category` through its
 public PHP API. It complements the [Category Package Reference](../CATEGORY_PACKAGE_REFERENCE.md):
 the reference is the complete contract inventory, while this guide shows the
 normal Host workflow and the decisions that must remain explicit.
 
 ## What the package provides
 
-`maatify/category` owns these five domain areas:
+`maatify/php-category` owns these five domain areas:
 
 - Categories: hierarchy, status, display order, and lifecycle.
 - Category Content: unlocalized and localized name/description records.
@@ -22,10 +22,10 @@ application layer.
 
 ## Installation and prerequisites
 
-Install the package through Composer:
+Install the `v1.0.0-rc.1` Release Candidate using its exact Composer version:
 
 ```bash
-composer require maatify/category
+composer require maatify/php-category:1.0.0-rc.1
 ```
 
 The runtime contract requires PHP `^8.4`, `ext-mbstring`, `ext-pdo`,

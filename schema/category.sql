@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Category V1 Phase 1 schema: Category taxonomy foundation
--- Package: maatify/category
+-- Package: maatify/php-category
 -- =============================================================================
 --
 -- Scope:

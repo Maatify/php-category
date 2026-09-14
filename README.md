@@ -17,16 +17,13 @@ Framework-neutral hierarchical categories, contents, extensible Host-defined
 content fields, a Category-owned Image Role registry, and Category-owned image assignments for reusable PHP
 applications.
 
-**Target:** `v1.0.0-rc.1`
+**Version:** `v1.0.0-rc.1`
 
-**State:** RC publication preparation / pre-publication readiness
+**Release status:** Release Candidate (Pre-Stable)
 
-The target RC has not been published and is not externally Composer-resolvable.
-The public API remains subject to pre-publication validation; no Stable
-compatibility or supported Stable line is claimed. After owner-approved
-publication, the Consumer Verification Harness and at least two independent
-Real Host validations must use this same published RC before the first Stable
-release.
+No Stable compatibility or supported Stable line is claimed. Before the first
+Stable release, the Consumer Verification Harness and at least two independent
+Real Host validations must use this exact RC.
 
 </div>
 
@@ -34,7 +31,7 @@ release.
 
 ## Package Summary
 
-`maatify/category` provides typed Category domain/application contracts, PDO
+`maatify/php-category` provides typed Category domain/application contracts, PDO
 adapters, MySQL schema, hierarchy invariants, lifecycle operations, ordering,
 and exact-scope references to host Media Asset identities and Host-defined
 content values,
@@ -200,11 +197,15 @@ visibility.
 
 ## Installation
 
-The target `v1.0.0-rc.1` has not been published to Packagist and cannot
-currently be resolved as that exact external Composer version. A branch,
-repository checkout, local path, or VCS source is not a published RC and does
-not substitute for exact-version Consumer Verification Harness or Real Host
-validation. No install command is provided for this unpublished target.
+Install the `v1.0.0-rc.1` Release Candidate with Composer:
+
+```bash
+composer require maatify/php-category:1.0.0-rc.1
+```
+
+A branch, repository checkout, local path, or VCS source is not a published RC
+and does not substitute for exact-version Consumer Verification Harness or
+Real Host validation.
 
 ## Quick Usage
 
@@ -288,8 +289,7 @@ composer test:integration
 composer test
 ```
 
-This pre-publication state does not publish a tag, GitHub Release, or Packagist
-version. Final Acceptance of the RC.1 readiness boundary does not mean Stable
+This Release Candidate is pre-Stable; RC readiness does not mean Stable
 readiness.
 
 ## License

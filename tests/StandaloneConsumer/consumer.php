@@ -278,7 +278,7 @@ function standalone_consumer_database_objects(\PDO $pdo, string $objectType): ar
     return $objects;
 }
 
-$packageSourceRoot = realpath(__DIR__ . '/vendor/maatify/category/src');
+$packageSourceRoot = realpath(__DIR__ . '/vendor/maatify/php-category/src');
 if (!is_string($packageSourceRoot)) {
     standalone_consumer_fail('The installed Category source directory is missing from the clean consumer.');
 }
@@ -314,7 +314,7 @@ try {
     standalone_consumer_fail('Standalone consumer could not connect to Real MySQL: ' . $exception->getMessage());
 }
 
-$schemaPath = __DIR__ . '/vendor/maatify/category/schema/category.sql';
+$schemaPath = __DIR__ . '/vendor/maatify/php-category/schema/category.sql';
 standalone_consumer_require(is_file($schemaPath), 'The installed Category schema file is missing.');
 
 try {

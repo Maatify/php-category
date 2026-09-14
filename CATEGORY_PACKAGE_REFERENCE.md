@@ -1,6 +1,6 @@
 # Category Package Reference
 
-`maatify/category` is the canonical, framework-neutral package for reusable
+`maatify/php-category` is the canonical, framework-neutral package for reusable
 hierarchical categories, optional Category Content, extensible Category Content
 Fields, a Category-owned Image Role registry, and Category-owned Image
 Assignments. This file is the package's
@@ -926,7 +926,7 @@ appropriate `CategoryPersistenceException` hierarchy.
 
 ## Composer and platform contract
 
-The package is `maatify/category`, type `library`, under the
+The package is `maatify/php-category`, type `library`, under the
 `Maatify\Category\` PSR-4 namespace. Its direct runtime requirements are PHP
 `^8.4`, `ext-mbstring`, `ext-pdo`, `ext-pdo_mysql`, `maatify/exceptions:^1.0`,
 `maatify/persistence:^1.3`, and `maatify/shared-common:^1.0`. Development

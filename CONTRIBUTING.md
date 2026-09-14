@@ -1,4 +1,4 @@
-# Contributing — maatify/category
+# Contributing — maatify/php-category
 
 ## Scope
 
