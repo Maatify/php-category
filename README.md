@@ -34,7 +34,7 @@ release.
 
 ## Package Summary
 
-`maatify/category` provides typed Category domain/application contracts, PDO
+`maatify/php-category` provides typed Category domain/application contracts, PDO
 adapters, MySQL schema, hierarchy invariants, lifecycle operations, ordering,
 and exact-scope references to host Media Asset identities and Host-defined
 content values,
@@ -200,11 +200,20 @@ visibility.
 
 ## Installation
 
-The target `v1.0.0-rc.1` has not been published to Packagist and cannot
-currently be resolved as that exact external Composer version. A branch,
-repository checkout, local path, or VCS source is not a published RC and does
-not substitute for exact-version Consumer Verification Harness or Real Host
-validation. No install command is provided for this unpublished target.
+The target `v1.0.0-rc.1` remains a pre-publication target after umbrella PR #48
+merges; tagging, release, and distribution publication require a separate
+owner-approved release action. It has not been tagged, published to Packagist,
+or made externally Composer-resolvable. The command below records the canonical
+package identity only; it becomes usable after an actual approved publication
+to a Composer source and does not install the current unpublished target.
+
+```bash
+composer require maatify/php-category
+```
+
+A branch, repository checkout, local path, or VCS source is not a published RC
+and does not substitute for exact-version Consumer Verification Harness or
+Real Host validation.
 
 ## Quick Usage
 

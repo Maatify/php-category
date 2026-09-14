@@ -248,13 +248,13 @@ jobs:
           cp tests/StandaloneConsumer/composer.json "$consumer_dir/composer.json"
           cp tests/StandaloneConsumer/consumer.php "$consumer_dir/consumer.php"
           composer config repositories.category vcs "$vcs_dir" --working-dir="$consumer_dir"
-          composer require --no-interaction --prefer-dist --no-progress --working-dir="$consumer_dir" "maatify/category:dev-$source_branch"
+          composer require --no-interaction --prefer-dist --no-progress --working-dir="$consumer_dir" "maatify/php-category:dev-$source_branch"
           composer validate --strict --working-dir="$consumer_dir"
           composer install --no-interaction --prefer-dist --no-progress --working-dir="$consumer_dir"
           composer dump-autoload --optimize --strict-psr --working-dir="$consumer_dir"
           composer check-platform-reqs --working-dir="$consumer_dir"
           composer audit --no-interaction --abandoned=fail --working-dir="$consumer_dir"
-          jq -e '.packages[] | select(.name == "maatify/category" and .source.type == "git")' "$consumer_dir/composer.lock"
+          jq -e '.packages[] | select(.name == "maatify/php-category" and .source.type == "git")' "$consumer_dir/composer.lock"
           if composer show --tree --working-dir="$consumer_dir" | grep -E -i '(^|[^[:alnum:]_])(adminkernel|admin-control-panel|catalog|slim|php-di)([^[:alnum:]_]|$)'; then
             echo "The clean consumer resolved a forbidden host dependency."
             exit 1

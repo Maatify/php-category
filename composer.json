@@ -1,5 +1,5 @@
 {
-  "name": "maatify/category",
+  "name": "maatify/php-category",
   "description": "Framework-neutral hierarchical category and content domain with PDO persistence.",
   "keywords": [
     "category",
@@ -11,7 +11,7 @@
     "php",
     "maatify"
   ],
-  "homepage": "https://github.com/Maatify/category",
+  "homepage": "https://github.com/Maatify/php-category",
   "type": "library",
   "license": "MIT",
   "authors": [
@@ -22,9 +22,9 @@
     }
   ],
   "support": {
-    "issues": "https://github.com/Maatify/category/issues",
-    "source": "https://github.com/Maatify/category",
-    "security": "https://github.com/Maatify/category/security/policy"
+    "issues": "https://github.com/Maatify/php-category/issues",
+    "source": "https://github.com/Maatify/php-category",
+    "security": "https://github.com/Maatify/php-category/security/policy"
   },
   "autoload": {
     "psr-4": {

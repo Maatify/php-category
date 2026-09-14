@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-**RC publication preparation:** target `v1.0.0-rc.1`. The RC has not been
-tagged, published, or made externally Composer-resolvable; no release date is
-assigned. The Consumer Verification Harness and at least two independent Real
-Host validations must use that same published RC before the first Stable
-release.
+**RC publication preparation:** target `v1.0.0-rc.1` after umbrella PR #48
+merges. Tagging, release, and distribution publication remain a separate
+owner-approved release action. The RC has not been tagged, published, or made
+externally Composer-resolvable; no release date is assigned. The Consumer
+Verification Harness and at least two independent Real Host validations must
+use that same published RC before the first Stable release.
 
 These unreleased notes describe package work prepared for the target
 `v1.0.0-rc.1`; they do not describe a published RC or set a release date.

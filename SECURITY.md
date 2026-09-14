@@ -1,6 +1,6 @@
 # Security Policy
 
-[![Maatify Category](https://img.shields.io/badge/Maatify-Category-blue?style=for-the-badge)](https://github.com/Maatify/category)
+[![Maatify Category](https://img.shields.io/badge/Maatify-Category-blue?style=for-the-badge)](https://github.com/Maatify/php-category)
 [![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-9C27B0?style=for-the-badge)](https://github.com/Maatify)
 
 ## Scope
@@ -29,5 +29,5 @@ is an unpublished target only and creates no support commitment.
 ## Reporting a Vulnerability
 
 Please report vulnerabilities through the repository's
-[private GitHub security advisory channel](https://github.com/Maatify/category/security/advisories/new).
+[private GitHub security advisory channel](https://github.com/Maatify/php-category/security/advisories/new).
 Do not disclose sensitive details in a public issue.
