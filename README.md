@@ -4,10 +4,18 @@
 
 ![Maatify.dev](https://www.maatify.dev/assets/img/img/maatify_logo_white.svg)
 
-[![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-blueviolet)](https://github.com/Maatify)
+**Package Status**
+
 [![PHP](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%20max-2F9E44.svg)](phpstan.neon)
+
+**Ecosystem / Adoption**
+
+[![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-blueviolet)](https://github.com/Maatify)
+
+**Documentation**
+
 [![Changelog](https://img.shields.io/badge/Changelog-View-blue.svg)](CHANGELOG.md)
 [![Package Reference](https://img.shields.io/badge/Reference-Read-blue.svg)](CATEGORY_PACKAGE_REFERENCE.md)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
