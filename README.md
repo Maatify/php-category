@@ -6,13 +6,18 @@
 
 **Package Status**
 
-[![PHP](https://img.shields.io/badge/PHP-8.4%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Pre-release](https://img.shields.io/packagist/v/maatify/php-category.svg?include_prereleases&label=Pre-release)](https://packagist.org/packages/maatify/php-category)
+[![PHP Version](https://img.shields.io/packagist/php-v/maatify/php-category.svg)](https://packagist.org/packages/maatify/php-category)
+[![License](https://img.shields.io/packagist/l/maatify/php-category.svg)](LICENSE)
 [![PHPStan](https://img.shields.io/badge/PHPStan-level%20max-2F9E44.svg)](phpstan.neon)
 
 **Ecosystem / Adoption**
 
+[![Packagist](https://img.shields.io/badge/Packagist-maatify%2Fphp--category-F28D1A)](https://packagist.org/packages/maatify/php-category)
+[![Monthly Downloads](https://img.shields.io/packagist/dm/maatify/php-category)](https://packagist.org/packages/maatify/php-category)
+[![Total Downloads](https://img.shields.io/packagist/dt/maatify/php-category)](https://packagist.org/packages/maatify/php-category)
 [![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-blueviolet)](https://github.com/Maatify)
+[![Install](https://img.shields.io/badge/Install-composer%20require%20maatify%2Fphp--category-blue)](https://packagist.org/packages/maatify/php-category)
 
 **Documentation**
 
