@@ -1,17 +1,19 @@
 -- =============================================================================
 -- Category V1 Phase 1 schema: Category taxonomy foundation
--- Package: maatify/category
+-- Package: maatify/php-category
 -- =============================================================================
 --
 -- Scope:
---   - This file contains only Category and Category Translation tables plus
+--   - This file contains only Category, Category Content, Category Content
+--     Field, Category Image Role, and Category Image Assignment tables plus
 --     the package-owned triggers required for the Category self-parent rule.
 --   - It does not define Catalog, Product, Pricing, Inventory, Media, or Host
 --     tables and has no relationship to any Host-owned table.
 --
 -- Timestamp contract:
 --   - created_at, updated_at, and deleted_at are managed by the Category
---     application and stored as UTC values.
+--     application from values supplied by the Host Clock; Category does not
+--     choose or normalize a timezone.
 --   - No DEFAULT CURRENT_TIMESTAMP or ON UPDATE CURRENT_TIMESTAMP is used.
 --
 -- Deletion contract:
@@ -29,10 +31,45 @@
 --   - Category application creation assigns it through the shared
 --     maatify/persistence Ordering API inside its transaction.
 --
--- Translation lifecycle contract:
---   - Category application commands own translation creation, content update,
---     soft deletion, and restoration.
+-- Content lifecycle contract:
+--   - Category application commands own Content creation, content update, soft
+--     deletion, and restoration.
 --   - (category_id, language_code) is the immutable logical identity.
+--
+-- Image Assignment contract:
+--   - Category owns the assignment relation to a host-provided Media Asset ID.
+--   - role_id, language_code, and platform are nullable scope dimensions; NULL
+--     is an exact value, not a fallback request. Empty strings are invalid.
+--   - The stable identity is (category_id, media_asset_id, role_id,
+--     language_code, platform), including soft-deleted rows.
+--   - ordering_scope is a generated composite scope consumed by the shared
+--     maatify/persistence Ordering API; it includes Category identity and all
+--     exact nullable dimensions because ordering is independent per scope.
+--   - is_default is an explicit assignment property. Each exact scope allows
+--     zero or one active default; no fallback, auto-default, or promotion is
+--     performed. Soft deletion and restoration leave an assignment non-default.
+--   - default_scope_identity is a conditional generated uniqueness identity;
+--     only an active default row participates in its unique key.
+--
+-- Image Role contract:
+--   - Category owns the immutable role_key registry and active/inactive
+--     lifecycle. Role names are created by the Host; no roles are seeded here.
+--   - A role_key is globally unique and remains reserved after soft deletion.
+--   - Role semantics, cardinality, and media policy remain Host-owned.
+--
+-- Content Field contract:
+--   - Category Content Fields are arbitrary Host-defined key/value content;
+--     Category does not interpret field_key semantics.
+--   - format is exactly lowercase text, html, or json. Its binary column
+--     collation keeps the database invariant aligned with the PHP enum. The
+--     value is LONGTEXT so WYSIWYG HTML and structured content are not
+--     truncated; Category does not sanitize or render HTML.
+--   - (category_id, field_key, language_code, platform) is immutable and
+--     unique, including soft-deleted rows. NULL scope dimensions are mapped
+--     to generated identity columns for NULL-safe uniqueness.
+--   - ordering_scope is a generated exact Category plus language/platform
+--     scope consumed by maatify/persistence; fields share one sequence per
+--     exact scope regardless of field_key.
 -- =============================================================================
 
 CREATE TABLE `maa_category_categories`
@@ -42,9 +79,9 @@ CREATE TABLE `maa_category_categories`
     `code`          VARCHAR(100) NOT NULL COMMENT 'Stable immutable category code; remains reserved after soft deletion',
     `status`        VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'Administrative category status; allowed values are active or inactive',
     `display_order` INT NOT NULL COMMENT 'Business-controlled positive order within the same parent scope; assigned by the Category application through maatify/persistence',
-    `created_at`    DATETIME NOT NULL COMMENT 'UTC timestamp assigned by the Category application when the category is created',
-    `updated_at`    DATETIME NOT NULL COMMENT 'UTC timestamp assigned by the Category application on mutation, soft delete, or restore',
-    `deleted_at`    DATETIME NULL COMMENT 'UTC timestamp assigned by the Category application on soft delete; NULL means not deleted',
+    `created_at`    DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application when the category is created',
+    `updated_at`    DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application on mutation, soft delete, or restore',
+    `deleted_at`    DATETIME NULL COMMENT 'Host Clock timestamp assigned by the Category application on soft delete; NULL means not deleted',
 
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_maa_category_categories_code` (`code`),
@@ -61,20 +98,25 @@ DEFAULT CHARSET = utf8mb4
 COLLATE = utf8mb4_unicode_ci
 COMMENT = 'Category hierarchy foundation with stable codes and soft deletion';
 
-CREATE TABLE `maa_category_category_translations`
+CREATE TABLE `maa_category_category_contents`
 (
-    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Internal immutable category translation identity generated by the database',
-    `category_id`   BIGINT UNSIGNED NOT NULL COMMENT 'Internal category identity owning this translation; no Host-table reference',
-    `language_code` VARCHAR(16) NOT NULL COMMENT 'Language code constrained by the Category package syntactic/storage contract; Host owns semantic language support and locale policy',
-    `name`          VARCHAR(255) NOT NULL COMMENT 'Translated category name for the specified language',
-    `description`   TEXT NULL COMMENT 'Optional translated category description for the specified language',
-    `created_at`    DATETIME NOT NULL COMMENT 'UTC timestamp assigned by the Category application when the translation is created',
-    `updated_at`    DATETIME NOT NULL COMMENT 'UTC timestamp assigned by the Category application on translation mutation, soft delete, or restore',
-    `deleted_at`    DATETIME NULL COMMENT 'UTC timestamp assigned by the Category application on soft delete; NULL means not deleted',
+    `id`                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Internal immutable Category Content identity generated by the database',
+    `category_id`            BIGINT UNSIGNED NOT NULL COMMENT 'Internal category identity owning this Content; no Host-table reference',
+    `language_code`          VARCHAR(16) NULL COMMENT 'Nullable language identity: NULL is unlocalized Content; non-NULL is localized Content; Host owns semantic language support and locale policy',
+    `language_code_identity` VARCHAR(16) GENERATED ALWAYS AS (COALESCE(`language_code`, '')) STORED COMMENT 'Generated uniqueness key that maps the unlocalized NULL identity to one database value',
+    `name`                   VARCHAR(255) NOT NULL COMMENT 'Category name for unlocalized or specified localized Content',
+    `description`            TEXT NULL COMMENT 'Optional Category description for unlocalized or specified localized Content',
+    `created_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application when the Content is created',
+    `updated_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application on Content mutation, soft delete, or restore',
+    `deleted_at`             DATETIME NULL COMMENT 'Host Clock timestamp assigned by the Category application on soft delete; NULL means not deleted',
 
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_maa_category_category_translations_identity` (`category_id`, `language_code`),
-    CONSTRAINT `fk_maa_category_category_translations_category` FOREIGN KEY (`category_id`)
+    UNIQUE KEY `uq_maa_category_category_contents_identity` (`category_id`, `language_code_identity`),
+    CONSTRAINT `chk_maa_category_category_contents_language_code` CHECK (
+        `language_code` IS NULL
+        OR (CHAR_LENGTH(TRIM(`language_code`)) > 0 AND CHAR_LENGTH(`language_code`) <= 16)
+    ),
+    CONSTRAINT `fk_maa_category_category_contents_category` FOREIGN KEY (`category_id`)
         REFERENCES `maa_category_categories` (`id`)
         ON DELETE RESTRICT
         ON UPDATE RESTRICT
@@ -82,7 +124,173 @@ CREATE TABLE `maa_category_category_translations`
 ENGINE = InnoDB
 DEFAULT CHARSET = utf8mb4
 COLLATE = utf8mb4_unicode_ci
-COMMENT = 'Localized category names and descriptions keyed by category and BCP-47 language code';
+COMMENT = 'Unlocalized and localized Category Content keyed by category and nullable language identity';
+
+CREATE TABLE `maa_category_category_image_roles`
+(
+    `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Internal immutable Category Image Role identity generated by the database',
+    `role_key`   VARCHAR(100) NOT NULL COMMENT 'Host-created immutable Role key; globally unique and permanently reserved after soft deletion',
+    `status`     VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'active' COMMENT 'Typed Role lifecycle status; allowed values are exact lowercase active or inactive',
+    `created_at` DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application when the Role is created',
+    `updated_at` DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application on Role mutation, soft delete, or restore',
+    `deleted_at` DATETIME NULL COMMENT 'Host Clock timestamp assigned by the Category application on soft delete; NULL means not soft deleted',
+
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_maa_category_category_image_roles_role_key` (`role_key`),
+    KEY `idx_maa_category_category_image_roles_status_deleted_key` (`status`, `deleted_at`, `role_key`, `id`),
+    CONSTRAINT `chk_maa_category_category_image_roles_role_key` CHECK (
+        CHAR_LENGTH(TRIM(`role_key`)) > 0 AND CHAR_LENGTH(`role_key`) <= 100
+    ),
+    CONSTRAINT `chk_maa_category_category_image_roles_status` CHECK (
+        BINARY `status` IN (BINARY 'active', BINARY 'inactive')
+    )
+)
+ENGINE = InnoDB
+DEFAULT CHARSET = utf8mb4
+COLLATE = utf8mb4_unicode_ci
+COMMENT = 'Package-owned immutable Category Image Role registry with lifecycle state';
+
+CREATE TABLE `maa_category_category_image_assignments`
+(
+    `id`                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Internal immutable Category Image Assignment identity generated by the database',
+    `category_id`            BIGINT UNSIGNED NOT NULL COMMENT 'Internal Category identity owning this assignment; no Host-table reference',
+    `media_asset_id`         BIGINT UNSIGNED NOT NULL COMMENT 'Host-provided external Media Asset identity; deliberately has no foreign key',
+    `role_id`                BIGINT UNSIGNED NULL COMMENT 'Nullable internal Category Image Role identity; NULL is the generic/unclassified scope',
+    `language_code`          VARCHAR(16) NULL COMMENT 'Nullable exact language scope; NULL is a distinct unlocalized scope; Host owns semantic language support',
+    `platform`               VARCHAR(255) NULL COMMENT 'Nullable exact platform scope; NULL is a distinct exact NULL scope; no fallback or automatic all-platform resolution; no hardcoded platform enum',
+    `role_id_identity`       BIGINT UNSIGNED GENERATED ALWAYS AS (COALESCE(`role_id`, 0)) STORED COMMENT 'Generated uniqueness key mapping NULL Role to one database value',
+    `language_code_identity` VARCHAR(16) GENERATED ALWAYS AS (COALESCE(`language_code`, '')) STORED COMMENT 'Generated uniqueness key mapping NULL language to one database value',
+    `platform_identity`      VARCHAR(255) GENERATED ALWAYS AS (COALESCE(`platform`, '')) STORED COMMENT 'Generated uniqueness key mapping NULL platform to one database value',
+    `ordering_scope`         VARCHAR(512) GENERATED ALWAYS AS (
+        CONCAT(
+            'C', CAST(`category_id` AS CHAR), '|',
+            CASE
+                WHEN `language_code` IS NULL THEN 'N:'
+                ELSE CONCAT('L', CHAR_LENGTH(`language_code`), ':', `language_code`)
+            END,
+            '|',
+            CASE
+                WHEN `platform` IS NULL THEN 'N:'
+                ELSE CONCAT('L', CHAR_LENGTH(`platform`), ':', `platform`)
+            END,
+            '|',
+            CASE
+                WHEN `role_id` IS NULL THEN 'N:'
+                ELSE CONCAT('R', CAST(`role_id` AS CHAR))
+            END
+        )
+    ) STORED COMMENT 'Generated exact Category plus role/language/platform ordering scope for maatify/persistence',
+    `is_default`             TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Explicit default marker within the exact Category, Role, language, and platform scope; zero or one active default is allowed',
+    `display_order`          INT NOT NULL COMMENT 'Business-controlled positive order within the exact Category and scope; assigned by the Category application through maatify/persistence',
+    `created_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application when the assignment is created',
+    `updated_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application on ordering, default mutation, soft delete, or restore',
+    `deleted_at`             DATETIME NULL COMMENT 'Host Clock timestamp assigned by the Category application on soft delete; NULL means not deleted',
+    `default_scope_identity` VARCHAR(512) GENERATED ALWAYS AS (
+        CASE
+            WHEN `is_default` = 1 AND `deleted_at` IS NULL THEN `ordering_scope`
+            ELSE NULL
+        END
+    ) STORED COMMENT 'Conditional generated exact-scope identity; only an active default row participates in the unique key',
+
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_maa_category_category_image_assignments_identity` (
+        `category_id`, `media_asset_id`, `role_id_identity`, `language_code_identity`, `platform_identity`
+    ),
+    UNIQUE KEY `uq_maa_category_category_image_assignments_default_scope` (`default_scope_identity`),
+    KEY `idx_maa_category_category_image_assignments_ordering` (
+        `ordering_scope`, `deleted_at`, `display_order`, `id`
+    ),
+    CONSTRAINT `chk_maa_category_category_image_assignments_media_asset_id` CHECK (`media_asset_id` > 0),
+    CONSTRAINT `chk_maa_category_category_image_assignments_role_id` CHECK (`role_id` IS NULL OR `role_id` > 0),
+    CONSTRAINT `chk_maa_category_category_image_assignments_is_default` CHECK (`is_default` IN (0, 1)),
+    CONSTRAINT `chk_maa_category_category_image_assignments_language_code` CHECK (
+        `language_code` IS NULL
+        OR (CHAR_LENGTH(TRIM(`language_code`)) > 0 AND CHAR_LENGTH(`language_code`) <= 16)
+    ),
+    CONSTRAINT `chk_maa_category_category_image_assignments_platform` CHECK (
+        `platform` IS NULL
+        OR (CHAR_LENGTH(TRIM(`platform`)) > 0 AND CHAR_LENGTH(`platform`) <= 255)
+    ),
+    CONSTRAINT `chk_maa_category_category_image_assignments_display_order` CHECK (`display_order` > 0),
+    CONSTRAINT `fk_maa_category_category_image_assignments_category` FOREIGN KEY (`category_id`)
+        REFERENCES `maa_category_categories` (`id`)
+        ON DELETE RESTRICT
+        ON UPDATE RESTRICT,
+    CONSTRAINT `fk_maa_category_category_image_assignments_role` FOREIGN KEY (`role_id`)
+        REFERENCES `maa_category_category_image_roles` (`id`)
+        ON DELETE RESTRICT
+        ON UPDATE RESTRICT
+)
+ENGINE = InnoDB
+DEFAULT CHARSET = utf8mb4
+COLLATE = utf8mb4_unicode_ci
+COMMENT = 'Category-owned exact-scope links to externally owned Media Asset identities, optionally classified by a Role';
+
+CREATE TABLE `maa_category_category_content_fields`
+(
+    `id`                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Internal immutable Category Content Field identity generated by the database',
+    `category_id`            BIGINT UNSIGNED NOT NULL COMMENT 'Internal category identity owning this field; no Host-table reference',
+    `field_key`              VARCHAR(100) NOT NULL COMMENT 'Immutable Host-defined field key; Category does not assign semantic meaning',
+    `language_code`          VARCHAR(16) NULL COMMENT 'Nullable exact language scope; NULL is a distinct neutral scope; Host owns semantic language support',
+    `platform`               VARCHAR(255) NULL COMMENT 'Nullable exact platform scope; NULL is a distinct neutral scope; Host owns semantic platform support',
+    `language_code_identity` VARCHAR(16) GENERATED ALWAYS AS (COALESCE(`language_code`, '')) STORED COMMENT 'Generated uniqueness key mapping NULL language to one database value',
+    `platform_identity`      VARCHAR(255) GENERATED ALWAYS AS (COALESCE(`platform`, '')) STORED COMMENT 'Generated uniqueness key mapping NULL platform to one database value',
+    `ordering_scope`         VARCHAR(512) GENERATED ALWAYS AS (
+        CONCAT(
+            'C', CAST(`category_id` AS CHAR), '|',
+            CASE
+                WHEN `language_code` IS NULL THEN 'N:'
+                ELSE CONCAT('L', CHAR_LENGTH(`language_code`), ':', `language_code`)
+            END,
+            '|',
+            CASE
+                WHEN `platform` IS NULL THEN 'N:'
+                ELSE CONCAT('L', CHAR_LENGTH(`platform`), ':', `platform`)
+            END
+        )
+    ) STORED COMMENT 'Generated exact Category plus language/platform ordering scope for maatify/persistence',
+    `format`                 VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Typed stored content format: exact lowercase text, html, or json',
+    `value`                  LONGTEXT NOT NULL COMMENT 'Required Host-defined content value; Category stores raw text/HTML/JSON without rendering or sanitization',
+    `display_order`          INT NOT NULL COMMENT 'Business-controlled positive order within the exact Category and scope; assigned through maatify/persistence',
+    `created_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application when the field is created',
+    `updated_at`             DATETIME NOT NULL COMMENT 'Host Clock timestamp assigned by the Category application on field mutation, ordering, soft delete, or restore',
+    `deleted_at`             DATETIME NULL COMMENT 'Host Clock timestamp assigned by the Category application on soft delete; NULL means not deleted',
+
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_maa_category_category_content_fields_identity` (
+        `category_id`, `field_key`, `language_code_identity`, `platform_identity`
+    ),
+    KEY `idx_maa_category_category_content_fields_ordering` (
+        `ordering_scope`, `deleted_at`, `display_order`, `id`
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_category_id` CHECK (`category_id` > 0),
+    CONSTRAINT `chk_maa_category_category_content_fields_field_key` CHECK (
+        CHAR_LENGTH(TRIM(`field_key`)) > 0 AND CHAR_LENGTH(`field_key`) <= 100
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_language_code` CHECK (
+        `language_code` IS NULL
+        OR (CHAR_LENGTH(TRIM(`language_code`)) > 0 AND CHAR_LENGTH(`language_code`) <= 16)
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_platform` CHECK (
+        `platform` IS NULL
+        OR (CHAR_LENGTH(TRIM(`platform`)) > 0 AND CHAR_LENGTH(`platform`) <= 255)
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_format` CHECK (
+        BINARY `format` IN (BINARY 'text', BINARY 'html', BINARY 'json')
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_json` CHECK (
+        `format` <> 'json' OR JSON_VALID(`value`)
+    ),
+    CONSTRAINT `chk_maa_category_category_content_fields_display_order` CHECK (`display_order` > 0),
+    CONSTRAINT `fk_maa_category_category_content_fields_category` FOREIGN KEY (`category_id`)
+        REFERENCES `maa_category_categories` (`id`)
+        ON DELETE RESTRICT
+        ON UPDATE RESTRICT
+)
+ENGINE = InnoDB
+DEFAULT CHARSET = utf8mb4
+COLLATE = utf8mb4_unicode_ci
+COMMENT = 'Host-defined exact-scope Category Content Fields with typed storage format and soft deletion';
 
 -- MySQL does not permit a CHECK expression to reference an AUTO_INCREMENT
 -- column. These package-owned triggers preserve the parent_id <> id invariant

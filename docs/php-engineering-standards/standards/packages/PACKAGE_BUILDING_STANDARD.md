@@ -1,6 +1,13 @@
 # PACKAGE_BUILDING_STANDARD
 
-**Maatify Standalone Composer Package Building Standard — v1**
+**Maatify Standalone Composer Package Building Standard**
+
+## Standard Metadata
+
+- **Standard ID:** `std-package-building`
+- **Standard Version:** `1.3.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 This document is the law for building any new standalone Composer package in the Maatify ecosystem.
 Read it fully before writing a single line of code.
 
@@ -29,7 +36,8 @@ A package without persistence or database behavior is not required to use PDO, p
 
 ### Scope and Ownership
 
-- This file owns runtime architecture, package structure, and test architecture.
+- This file owns runtime architecture, package structure, and package-specific testing applicability.
+- [`TESTING_STANDARD.md`](../testing/TESTING_STANDARD.md) owns the general testing strategy, observable-behavior evidence, regression-protection model, and Consumer Verification Harness contract; this Standard defines Package-readiness applicability and MUST NOT duplicate the Harness's detailed requirements.
 - [`COMPOSER_PACKAGE_STANDARD.md`](COMPOSER_PACKAGE_STANDARD.md) owns `composer.json`, dependency declarations, and version constraints.
 - [`CI_WORKFLOW_STANDARD.md`](CI_WORKFLOW_STANDARD.md) owns workflow and check execution.
 - [`LIBRARY_PRESENTATION_STANDARD.md`](LIBRARY_PRESENTATION_STANDARD.md) owns README structure, badges, and release-facing files.
@@ -74,7 +82,7 @@ Repository presentation, governance-document identity, release-facing metadata, 
 Composer package metadata, dependency declarations, autoloading, scripts, configuration, stability, and lock-file policy MUST follow [COMPOSER_PACKAGE_STANDARD.md](COMPOSER_PACKAGE_STANDARD.md).
 
 
-Every package must contain these files at its root (the repository root is the package root):
+Every package must contain these files at its package root (the repository root for a standalone package; for an in-project Base Module, the Artifact Root defined in [`MODULE_BUILDING_STANDARD.md`](../modules/MODULE_BUILDING_STANDARD.md)):
 
 ```
 ├── README.md                          ← installation, quick examples, what it does / does not
@@ -152,25 +160,17 @@ New packages and unpublished APIs MUST NOT introduce alternative names that omit
 
 ## 5. Directory Structure Inside `src/`
 
-```
-src/
-├── {Domain}/                                        ← subpackage / domain boundary
-│   ├── Exception/
-│   ├── Contract/
-│   ├── DTO/
-│   ├── Infrastructure/Repository/
-│   └── Service/
-│
-├── Common/                                          ← framework-neutral shared primitives only
-│
-├── Factory/                                         ← optional, only if framework-agnostic
-│
-└── Provider/                                        ← optional, only if framework-agnostic
+The default organizing principle is:
+
+```text
+Domain → Capability → Layer
 ```
 
-- **No mandatory `Admin/Customer`**: Domain boundaries should reflect logical separation.
-- **No mandatory `Bootstrap`**: Host apps are responsible for wiring.
-- **No framework-specific ServiceProvider/Bindings**: E.g., no Laravel/Slim/PHP-DI bindings inside the package.
+Organize first around meaningful domain boundaries, then around capabilities within each domain, and introduce layers inside a capability when its size or responsibilities need them. This is a design direction, not a required directory template: small packages MUST NOT add empty or ceremonial folders just to match a diagram.
+
+`Common/` is appropriate only for genuinely shared, framework-neutral primitives. The Host owns application bootstrap, container bindings, and framework-specific providers; conditional construction entry points are governed by Section 18.
+
+Packages MUST NOT impose `Admin/Customer` directories where those are not real domain boundaries. Package runtime exclusions are defined in Section 15.
 
 ---
 
@@ -233,7 +233,7 @@ This exception:
 - MUST remain package-specific and MUST NOT be copied into new packages
 - MUST be reconsidered only during a separately approved, meaningful future major release
 
-A major release MUST NOT be created solely to rename a legacy marker.
+Release-version selection, including whether a legacy marker rename warrants a Major release, is governed by [`LIBRARY_PRESENTATION_STANDARD.md`](LIBRARY_PRESENTATION_STANDARD.md).
 
 ### Example: Package-Defined Storage Exception
 
@@ -315,6 +315,10 @@ If a semantic conversion wraps the original throwable, the original should be re
 
 ## 8. Command Rules
 
+For public contracts accepting IDs as raw `int|string` input, accept only a canonical positive integer representation. Reject floats, booleans, null, signs, whitespace, leading zeroes, decimal notation, and scientific notation; check bounds before casting to `int`.
+
+For strict, known-format date-only input, use `\DateTimeImmutable::createFromFormat()` and require an exact round-trip string match so normalization or overflow is rejected. Inspecting `getLastErrors()` MAY provide an additional check. This does not prohibit general free-form date-time parsing with `\DateTimeImmutable`.
+
 Commands are self-validating value objects:
 
 ```php
@@ -338,16 +342,20 @@ final readonly class CreateSomethingCommand
 
 Rules:
 - `final readonly` — always
-- Validation only in the constructor — no business logic
+- A Command represents mutation or action intent. It validates its input contract in the constructor and MUST NOT perform business orchestration.
+- Query, search, and list filters use a `Criteria` or another explicit query contract; result or data snapshots use DTOs. An object representing execution intent MUST NOT be named a DTO.
+- A small operation with one or two typed inputs MAY use typed parameters directly when a Command would add no meaningful contract.
 - Display-order inputs MUST follow Section 16; `CreateCommand` and `UpdateCommand` do not accept `display_order`
-- Image inputs MUST follow Section 17; `CreateCommand` and `UpdateCommand` do not accept `image`
-- Host IDs (e.g. `methodId`, `currencyId`) must be validated with `>= 1` guard
+- Host IDs (e.g. `methodId`, `currencyId`) MUST follow the canonical positive-ID contract in this section.
+- Image/media inputs MUST follow the conditional ownership and assignment contract in Section 17; this Standard does not require every domain to have an image field or a dedicated image operation.
 - Monetary and fixed-precision decimal inputs MUST follow Section 19
-- Date/time strings must be validated with `new \DateTimeImmutable($value)` in a try/catch
+- General/free-form date-time strings MUST be validated with `new \DateTimeImmutable($value)` in a try/catch; strict known-format date-only inputs follow the round-trip rule defined earlier in this section.
 
 ---
 
 ## 9. DTO Rules
+
+DTOs represent data snapshots or results and MUST NOT be used as substitutes for Commands or other execution-intent contracts. Query filters belong in a `Criteria` or another explicit query contract, not in a result DTO.
 
 ```php
 final readonly class SomethingDTO implements \JsonSerializable
@@ -463,6 +471,12 @@ The authoritative owner is:
 Package:    maatify/persistence
 Repository: https://github.com/Maatify/persistence
 ```
+
+### Domain Query and Pagination Ownership
+
+The Package owns its domain query semantics, including searchable fields, filters, matching and escaping behavior, count semantics, and the public result contract. `maatify/persistence` owns only the reusable pagination and ordering mechanics exposed by its stable public API, as detailed below.
+
+Management list/search collections that do not have a clearly bounded small maximum MUST provide pagination from the start. A Host MUST NOT load an unbounded result set and paginate it after retrieval. The Package owns the alignment of count and data queries and the meaning of each page; shared mechanics remain delegated to the stable `maatify/persistence` API.
 
 ### Non-Duplication Rule
 
@@ -597,6 +611,12 @@ Accordingly, this Standard does not require any particular translation implement
 - fixed search fields
 - comparison with a base name
 
+### Unified Same-Shape Content Pattern
+
+Translation remains optional. When localized and non-localized values are the same concept with the same shape, a unified content relation that supports `language_code = NULL` and non-NULL language codes is the preferred pattern over a base relation plus a structurally duplicate translations relation.
+
+`NULL` represents the exact NULL-language scope; it MUST NOT mean fallback to or from a specific language unless the domain contract says so explicitly. A separate translation relation remains appropriate when structure, lifecycle, identity, or cardinality materially differs. This preference MUST NOT create a translation capability in a domain that does not need one.
+
 ### Host-Owned Language Identity
 
 If language or locale identity is owned by the Host, the Package MUST NOT create a foreign key to, or a JOIN with, Host tables, in accordance with the Package isolation rules. The Package must use only the identity and integration contract exposed to it without coupling its persistence to Host table structure.
@@ -619,8 +639,9 @@ If the Package owns persistence for translations:
 
 Responsibility:
 - **Business orchestration** lives in Services
-- **Validation** lives in Commands and DTO filters
+- **Input validation** lives in Commands; query filters are validated by their `Criteria` or query contract
 - **SQL** lives in Repositories or package-local/domain-local SQL support builders
+- **Display formatting** does not belong in Repositories or query layers; those layers return raw domain/database values for the Host's presentation layer.
 
 ```php
 // Command service — throws NotFoundException when repo returns false
@@ -661,6 +682,8 @@ However, infrastructure packages such as `{PACKAGE_SLUG}` should use their actua
 ## 15. Read / Admin Query API Rules
 
 Packages that have persisted data intended to be viewed, searched, audited, monitored, or reported by host applications should expose framework-agnostic PHP read/query contracts where applicable.
+
+When management and consumption are distinct domain use cases, the Package MUST expose a Management API and a Consumer API with separate contracts. Management APIs may support administrative search, filters, statuses, deleted-state visibility, and pagination. Consumer APIs expose only records valid under the Package's domain visibility invariants; the Host MUST NOT be left to reproduce those invariants through generic filters. If the two uses are not meaningfully distinct, a Package MUST NOT create duplicate APIs merely to satisfy this pattern.
 
 **Important:** This refers strictly to **PHP-level APIs** (e.g., PHP interfaces and DTOs), not HTTP APIs.
 
@@ -715,15 +738,19 @@ Until a stable Runtime API is separately approved, implemented, released, and re
 
 ---
 
-## 17. Image Rules
+## 17. Image and Media Rules
 
-- An `image` column is `VARCHAR(255) NULL` and stores a path or URL only, never binary data
-- `image` MUST NOT be accepted by `CreateCommand` or `UpdateCommand`
-- image changes MUST be exposed through dedicated package operations rather than generic update commands
-- the Command Repository image-update operation MUST return `bool` to report whether the target row existed and was updated
-- a Service MAY expose a `void` image-update operation and convert a Repository `false` result into the approved not-found exception
-- `null` clears the image by setting the column to `NULL`
-- translation-image updates MUST follow the same Repository `bool` / Service `void` layer contract
+Image and media support is conditional. A domain MUST NOT be required to introduce an image field or Media subsystem merely to comply with this Standard.
+
+### Simple Image Value
+
+A scalar path or URL is appropriate only when the domain treats the image as a simple value and does not require media lifecycle, roles, scopes, ordering, a default assignment, processing, or storage ownership. In that case the Package Reference defines the value and mutation semantics. This Standard does not impose `VARCHAR(255)`, null-clearing behavior, or a dedicated operation as universal rules.
+
+### External Media Asset and Domain Assignment
+
+When the domain requires media lifecycle, roles, scopes, ordering, default assignments, processing, or explicit storage ownership, it MUST use an external Media Asset and domain-assignment boundary. The Host/Media system owns upload, storage, processing, and media lifecycle. The Package stores only a stable external media identity (for example, `media_asset_id`) and MUST NOT add Host foreign keys, joins, repositories, or module dependencies to resolve it. The Package owns the assignment semantics it needs, such as role, exact scope, ordering, default, and assignment lifecycle.
+
+Assignment identity fields MUST remain stable under generic updates. A role registry is Package-owned only when role identity or its lifecycle/status is part of the Package's domain invariants. Nullable assignment scopes follow the exact-scope rule in Section 24; `NULL` MUST NOT imply a wildcard or fallback.
 
 ---
 
@@ -733,7 +760,9 @@ Until a stable Runtime API is separately approved, implemented, released, and re
 
 Rules:
 - No Slim/Laravel/Symfony/PHP-DI bindings as package requirements.
-- Optional factories or providers are allowed, but they must be strictly framework-agnostic.
+- A framework-neutral Factory or Builder is appropriate when internal wiring is non-trivial; a thin public Facade/API may be appropriate when multiple public capabilities make discovery or construction materially clearer.
+- These construction patterns are conditional, not boilerplate. A Factory MUST NOT become a Service Locator, and neither a Factory nor a Facade may depend on a framework container.
+- Optional Providers, when useful, must be strictly framework-agnostic.
 - Host applications are fully responsible for wiring dependencies through their own container or runtime environment.
 
 ---
@@ -823,7 +852,7 @@ No PHPStan baseline, `ignoreErrors`, or inline suppression is permitted merely t
 - Packages that own persistence, database, or external-service behavior MUST define appropriate Integration coverage. Unit and Regression suites remain required where applicable.
 - Package-owned test behavior, fixtures, and suite responsibilities belong to the package architecture and reference documentation.
 - CI execution requirements — including real-service provisioning, MySQL/SQLite enforcement, PHP matrices, cleanup/repeatability checks, and example syntax validation — are governed exclusively by [`CI_WORKFLOW_STANDARD.md`](CI_WORKFLOW_STANDARD.md).
-- Full PHPUnit verification must be part of the appropriate CI quality gate.
+- Package readiness requires the complete maintained and applicable test suite to be covered by the appropriate CI quality gate, using the repository's actual maintained test runner and tooling. CI execution and failure enforcement are governed by [`CI_WORKFLOW_STANDARD.md`](CI_WORKFLOW_STANDARD.md).
 
 ### PDO fetch results — always annotate
 
@@ -888,10 +917,11 @@ Compliance requires the repository's CI to pass the current Compliance Checklist
 
 - [ ] CI workflows exist, pass, and satisfy the current Compliance Checklist in `CI_WORKFLOW_STANDARD.md`
 - [ ] Package-owned runtime and test architecture is represented in CI where applicable
-- [ ] `README.md` written with installation steps and quick examples
-- [ ] `CHANGELOG.md` follows `LIBRARY_PRESENTATION_STANDARD.md`, retains `[Unreleased]` at the top, and begins release history at `[1.0.0]`
+- [ ] `README.md`, `CHANGELOG.md`, and other release-facing files comply with `LIBRARY_PRESENTATION_STANDARD.md`.
 - [ ] `{PACKAGE}_PACKAGE_REFERENCE.md` complete — full API, design rules, extension guide
 - [ ] `composer.json` complies with [COMPOSER_PACKAGE_STANDARD.md](COMPOSER_PACKAGE_STANDARD.md).
+- [ ] The consumer workflow and examples meet the requirements in Section 25.
+- [ ] The standalone Package has the reproducible Consumer Verification Harness required by [TESTING_STANDARD.md](../testing/TESTING_STANDARD.md).
 - [ ] Every public service/repository capability intended for infrastructure substitution has a matching contract (interface)
 - [ ] Domain-specific failure semantics are documented
 - [ ] Transaction catch blocks rethrow the original `\Throwable` after rollback — never swallow
@@ -900,3 +930,42 @@ Compliance requires the repository's CI to pass the current Compliance Checklist
 - [ ] Framework-agnostic boundaries preserved: no host app namespaces, no framework bindings required
 - [ ] No generic logger, recorder, or repository
 - [ ] Docs reflect current exception rules, package-defined exceptions use `maatify/exceptions`, and any clock/date-time contract uses `maatify/shared-common` instead of a local duplicate
+
+## 24. Domain Ownership, External References, and Lifecycle
+
+The Package Reference or Architecture MUST make ownership explicit for each domain capability and persisted concept:
+
+- what the Package owns and enforces as a domain invariant
+- what the Host owns
+- which values are stored only as stable external identities
+- which external concepts the Package does not interpret or manage the lifecycle of
+
+A Package MUST create an internal Registry only when the identity, lifecycle, status, or validity of that concept is part of the Package's own invariants. A Host-owned concept that the Package does not own is represented by a stable external ID or key; the Package MUST NOT acquire ownership merely because it stores or receives that value.
+
+Standalone Packages and Base Modules MUST NOT depend on Host foreign keys, Host-owned table joins, Host repositories, or Host modules. Where the Package does not own semantic validation of an external identity, that validation remains with the Host.
+
+Nullable scope fields use exact-scope semantics: `NULL` means only the exact NULL scope. It MUST NOT mean wildcard, fallback, all, default, any language, or any platform unless the domain contract explicitly defines that meaning.
+
+For each entity or assignment, the Package Reference MUST distinguish stable identity fields from mutable business fields, lifecycle fields, and ordering fields. Generic updates MUST NOT change stable identity. Soft Delete is optional and SHOULD be used only when domain history, restore behavior, or identity invariants require it; it is not a universal capability. When a lifecycle is used, its identity, uniqueness, restore, and deletion semantics MUST be documented.
+
+## 25. Runtime Workflow, Transactions, Concurrency, and Clock
+
+Each reusable Package MUST document a realistic consumer workflow in its Package Reference, Architecture, or practical Usage Guide. The documented workflow MUST show the consumer path:
+
+```text
+Host Input → Public API → Domain Service → Integration Boundary → Observable Result
+```
+
+Examples MUST demonstrate supported construction/wiring, a basic workflow, public API use, and the applicable integration boundaries. They illustrate the contract; the Package Reference and this Standard remain the sources of normative rules.
+
+When a domain invariant spans multiple operations, the Package MUST identify the transaction owner and the required transaction, locking, and concurrency boundaries. It MUST state whether an outer transaction is supported when that affects callers. Race-prone invariants—such as ordering, hierarchy, unique defaults, or lifecycle transitions—require concurrency verification when concurrent access is realistic for the domain. The Testing Standard owns the general testing evidence model.
+
+Packages MUST NOT change the global timezone. When the Package needs a clock abstraction, it MUST use the established Clock contract described in Section 2. The Host owns timezone policy unless the domain contract explicitly assigns a different policy to the Package. Repositories MUST NOT silently reinterpret timestamps.
+
+## 26. Extensible Content Fields Pattern
+
+Extensible content fields are conditional and are appropriate only when a domain needs variable content fields alongside its stable core fields. They MUST NOT be added merely to anticipate possible future extension.
+
+When this pattern applies, the domain contract may define a stable `field_key`, a value and typed format, exact optional scopes, deterministic ordering, lifecycle, and uniqueness according to actual domain invariants. Identity fields and scopes that define assignment identity MUST remain stable under generic updates.
+
+The Host owns the meaning and administration of `field_key`, including editor configuration, sanitization, rendering, and fallback, unless the Package's own domain explicitly owns those semantics. The Package MUST NOT create a Field Definition Registry solely because it stores a `field_key`; the Registry rule in Section 24 still applies.

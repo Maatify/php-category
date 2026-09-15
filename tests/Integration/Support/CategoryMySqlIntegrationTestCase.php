@@ -12,7 +12,10 @@ use RuntimeException;
 abstract class CategoryMySqlIntegrationTestCase extends TestCase
 {
     private const CATEGORY_TABLE = 'maa_category_categories';
-    private const TRANSLATION_TABLE = 'maa_category_category_translations';
+    private const CONTENT_TABLE = 'maa_category_category_contents';
+    private const IMAGE_ASSIGNMENT_TABLE = 'maa_category_category_image_assignments';
+    private const IMAGE_ROLE_TABLE = 'maa_category_category_image_roles';
+    private const CONTENT_FIELD_TABLE = 'maa_category_category_content_fields';
     private const INSERT_TRIGGER = 'trg_maa_category_categories_parent_not_self_ai';
     private const UPDATE_TRIGGER = 'trg_maa_category_categories_parent_not_self_bu';
 
@@ -108,8 +111,8 @@ abstract class CategoryMySqlIntegrationTestCase extends TestCase
             -1,
             PREG_SPLIT_NO_EMPTY,
         );
-        if (!is_array($statements) || count($statements) !== 4) {
-            throw new RuntimeException('The canonical Category schema must contain two tables and two triggers.');
+        if (!is_array($statements) || count($statements) !== 7) {
+            throw new RuntimeException('The canonical Category schema must contain five tables and two triggers.');
         }
 
         foreach ($statements as $statement) {
@@ -125,7 +128,10 @@ abstract class CategoryMySqlIntegrationTestCase extends TestCase
         }
         $connection->exec('DROP TRIGGER IF EXISTS `' . self::INSERT_TRIGGER . '`');
         $connection->exec('DROP TRIGGER IF EXISTS `' . self::UPDATE_TRIGGER . '`');
-        $connection->exec('DROP TABLE IF EXISTS `' . self::TRANSLATION_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::CONTENT_FIELD_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::IMAGE_ASSIGNMENT_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::IMAGE_ROLE_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::CONTENT_TABLE . '`');
         $connection->exec('DROP TABLE IF EXISTS `' . self::CATEGORY_TABLE . '`');
     }
 }

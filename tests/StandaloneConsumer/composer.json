@@ -1,0 +1,13 @@
+{
+  "name": "maatify/php-category-standalone-consumer",
+  "description": "CI-only external consumer for maatify/php-category.",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "php": "^8.4"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}

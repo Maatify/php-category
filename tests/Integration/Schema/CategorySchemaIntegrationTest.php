@@ -12,7 +12,10 @@ use RuntimeException;
 final class CategorySchemaIntegrationTest extends TestCase
 {
     private const CATEGORY_TABLE = 'maa_category_categories';
-    private const TRANSLATION_TABLE = 'maa_category_category_translations';
+    private const CONTENT_TABLE = 'maa_category_category_contents';
+    private const IMAGE_ASSIGNMENT_TABLE = 'maa_category_category_image_assignments';
+    private const IMAGE_ROLE_TABLE = 'maa_category_category_image_roles';
+    private const CONTENT_FIELD_TABLE = 'maa_category_category_content_fields';
     private const INSERT_TRIGGER = 'trg_maa_category_categories_parent_not_self_ai';
     private const UPDATE_TRIGGER = 'trg_maa_category_categories_parent_not_self_bu';
 
@@ -56,7 +59,10 @@ final class CategorySchemaIntegrationTest extends TestCase
     {
         self::assertSame([
             self::CATEGORY_TABLE,
-            self::TRANSLATION_TABLE,
+            self::CONTENT_FIELD_TABLE,
+            self::CONTENT_TABLE,
+            self::IMAGE_ASSIGNMENT_TABLE,
+            self::IMAGE_ROLE_TABLE,
         ], $this->tableNames());
         self::assertSame([
             self::INSERT_TRIGGER,
@@ -65,7 +71,10 @@ final class CategorySchemaIntegrationTest extends TestCase
         $this->assertTrigger(self::INSERT_TRIGGER, 'AFTER', 'INSERT');
         $this->assertTrigger(self::UPDATE_TRIGGER, 'BEFORE', 'UPDATE');
         $this->assertTableStorage(self::CATEGORY_TABLE);
-        $this->assertTableStorage(self::TRANSLATION_TABLE);
+        $this->assertTableStorage(self::CONTENT_TABLE);
+        $this->assertTableStorage(self::CONTENT_FIELD_TABLE);
+        $this->assertTableStorage(self::IMAGE_ASSIGNMENT_TABLE);
+        $this->assertTableStorage(self::IMAGE_ROLE_TABLE);
 
         $this->dropSchema();
         self::assertSame([], $this->tableNames());
@@ -74,24 +83,100 @@ final class CategorySchemaIntegrationTest extends TestCase
         $this->installSchema();
         self::assertSame([
             self::CATEGORY_TABLE,
-            self::TRANSLATION_TABLE,
+            self::CONTENT_FIELD_TABLE,
+            self::CONTENT_TABLE,
+            self::IMAGE_ASSIGNMENT_TABLE,
+            self::IMAGE_ROLE_TABLE,
         ], $this->tableNames());
         self::assertSame([
             self::INSERT_TRIGGER,
             self::UPDATE_TRIGGER,
         ], $this->triggerNames());
         $this->assertTableStorage(self::CATEGORY_TABLE);
-        $this->assertTableStorage(self::TRANSLATION_TABLE);
+        $this->assertTableStorage(self::CONTENT_TABLE);
+        $this->assertTableStorage(self::CONTENT_FIELD_TABLE);
+        $this->assertTableStorage(self::IMAGE_ASSIGNMENT_TABLE);
+        $this->assertTableStorage(self::IMAGE_ROLE_TABLE);
     }
 
-    public function testValidCategoryHierarchyAndTranslationCanBeStored(): void
+    public function testValidCategoryHierarchyAndContentCanBeStored(): void
     {
         $this->insertCategory(1, null, 'clothing', 'active');
         $this->insertCategory(2, 1, 'shirts', 'inactive');
-        $this->insertTranslation(1, 2, 'en-US');
+        $this->insertContent(1, 2, 'en-US');
+        $this->insertContent(2, 2, null);
+        $this->insertImageAssignment(1, 2, 100, null, null);
+        $this->insertImageAssignment(2, 2, 100, 'en-US', 'web');
 
         self::assertSame(2, $this->rowCount(self::CATEGORY_TABLE));
-        self::assertSame(1, $this->rowCount(self::TRANSLATION_TABLE));
+        self::assertSame(2, $this->rowCount(self::CONTENT_TABLE));
+        self::assertSame(2, $this->rowCount(self::IMAGE_ASSIGNMENT_TABLE));
+    }
+
+    public function testImageRoleIdentityConstraintIsDatabaseEnforced(): void
+    {
+        $this->insertRole(1, 'gallery', 'active');
+
+        $this->expectException(PDOException::class);
+        $this->insertRole(2, 'gallery', 'inactive');
+    }
+
+    public function testImageRoleStatusRequiresExactLowercaseValues(): void
+    {
+        $collationStatement = $this->connection()->prepare(
+            'SELECT COLLATION_NAME FROM information_schema.COLUMNS '
+            . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column',
+        );
+        $collationStatement->execute([
+            'table' => self::IMAGE_ROLE_TABLE,
+            'column' => 'status',
+        ]);
+        self::assertSame('utf8mb4_bin', $collationStatement->fetchColumn());
+
+        /** @var list<array{string, string}> $variants */
+        $variants = [
+            ['uppercase-active', 'ACTIVE'],
+            ['uppercase-inactive', 'INACTIVE'],
+            ['trailing-space-active', 'active '],
+            ['trailing-space-inactive', 'inactive '],
+        ];
+        foreach ($variants as [$roleKey, $status]) {
+            $this->assertImageRoleInsertRejected(
+                $roleKey,
+                $status,
+                sprintf('The database must reject non-exact Image Role status %s.', $status),
+            );
+        }
+    }
+
+    public function testImageAssignmentIdentityIncludesNullableRoleAndRoleScopes(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertRole(1, 'gallery', 'active');
+        $this->insertImageAssignment(1, 1, 100, null, null);
+        $this->insertImageAssignment(2, 1, 100, null, null, 1);
+
+        $this->expectException(PDOException::class);
+        $this->insertImageAssignment(3, 1, 100, null, null, 1);
+    }
+
+    public function testImageRoleForeignKeyIsRestrictive(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertRole(1, 'gallery', 'active');
+        $this->insertImageAssignment(1, 1, 100, null, null, 1);
+
+        try {
+            $this->connection()->exec('DELETE FROM `' . self::IMAGE_ROLE_TABLE . '` WHERE `id` = 1');
+            self::fail('A referenced Image Role must not be physically deleted.');
+        } catch (PDOException) {
+        }
+
+        try {
+            $this->connection()->exec('UPDATE `' . self::IMAGE_ROLE_TABLE . '` SET `id` = 2 WHERE `id` = 1');
+            self::fail('A referenced Image Role identity must not be physically updated.');
+        } catch (PDOException) {
+        }
     }
 
     public function testCategoryCodeMustBeUnique(): void
@@ -102,13 +187,140 @@ final class CategorySchemaIntegrationTest extends TestCase
         $this->insertCategory(2, null, 'clothing', 'active');
     }
 
-    public function testTranslationIdentityMustBeUnique(): void
+    public function testContentIdentityMustBeUnique(): void
     {
         $this->insertCategory(1, null, 'clothing', 'active');
-        $this->insertTranslation(1, 1, 'en-US');
+        $this->insertContent(1, 1, 'en-US');
 
         $this->expectException(PDOException::class);
-        $this->insertTranslation(2, 1, 'en-US');
+        $this->insertContent(2, 1, 'en-US');
+    }
+
+    public function testUnlocalizedContentIdentityMustBeUnique(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertContent(1, 1, null);
+
+        $this->expectException(PDOException::class);
+        $this->insertContent(2, 1, null);
+    }
+
+    public function testImageAssignmentIdentityMustBeUniqueIncludingNullScopeDimensions(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertImageAssignment(1, 1, 100, null, null);
+
+        $this->expectException(PDOException::class);
+        $this->insertImageAssignment(2, 1, 100, null, null);
+    }
+
+    public function testImageAssignmentAllowsTheSameMediaAssetInAnotherExactScope(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertImageAssignment(1, 1, 100, null, null);
+        $this->insertImageAssignment(2, 1, 100, 'en-US', null);
+        $this->insertImageAssignment(3, 1, 100, null, 'web');
+        $this->insertImageAssignment(4, 1, 100, 'en-US', 'web');
+
+        self::assertSame(4, $this->rowCount(self::IMAGE_ASSIGNMENT_TABLE));
+    }
+
+    public function testImageAssignmentDefaultIsUniquePerExactScopeAndUsesConditionalIdentity(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+        $this->insertImageAssignment(1, 1, 100, null, null, null, true);
+
+        try {
+            $this->insertImageAssignment(2, 1, 101, null, null, null, true);
+            self::fail('MySQL must reject two active defaults in one exact scope.');
+        } catch (PDOException) {
+        }
+
+        $this->connection()->exec(
+            "UPDATE `" . self::IMAGE_ASSIGNMENT_TABLE . "` SET `deleted_at` = '2026-01-02 00:00:00' WHERE `id` = 1",
+        );
+        $deletedIdentityStatement = $this->connection()->query(
+            'SELECT `default_scope_identity` FROM `' . self::IMAGE_ASSIGNMENT_TABLE . '` WHERE `id` = 1',
+        );
+        self::assertNotFalse($deletedIdentityStatement);
+        $deletedIdentity = $deletedIdentityStatement->fetchColumn();
+        self::assertNull($deletedIdentity);
+
+        $this->insertImageAssignment(2, 1, 101, null, null, null, true);
+        $activeIdentityStatement = $this->connection()->query(
+            'SELECT `default_scope_identity` FROM `' . self::IMAGE_ASSIGNMENT_TABLE . '` WHERE `id` = 2',
+        );
+        self::assertNotFalse($activeIdentityStatement);
+        $activeIdentity = $activeIdentityStatement->fetchColumn();
+        self::assertSame('C1|N:|N:|N:', $activeIdentity);
+
+        try {
+            $this->connection()->exec(
+                'UPDATE `' . self::IMAGE_ASSIGNMENT_TABLE . '` SET `is_default` = 2 WHERE `id` = 2',
+            );
+            self::fail('MySQL must reject values outside the is_default 0/1 domain.');
+        } catch (PDOException) {
+        }
+    }
+
+    public function testContentFieldFormatCheckRequiresExactLowercaseValues(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+
+        $collationStatement = $this->connection()->prepare(
+            'SELECT COLLATION_NAME FROM information_schema.COLUMNS '
+            . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column',
+        );
+        $collationStatement->execute([
+            'table' => self::CONTENT_FIELD_TABLE,
+            'column' => 'format',
+        ]);
+        self::assertSame('utf8mb4_bin', $collationStatement->fetchColumn());
+
+        /** @var list<array{string, string, string}> $variants */
+        $variants = [
+            ['json-uppercase', 'JSON', '{}'],
+            ['text-uppercase', 'TEXT', 'plain'],
+            ['html-uppercase', 'HTML', '<p>plain</p>'],
+            ['json-trailing-space', 'json ', '{}'],
+            ['text-trailing-space', 'text ', 'plain'],
+        ];
+        foreach ($variants as [$fieldKey, $format, $value]) {
+            $this->assertContentFieldInsertRejected(
+                $fieldKey,
+                $format,
+                $value,
+                sprintf('The database must reject uppercase Content Field format %s.', $format),
+            );
+        }
+    }
+
+    public function testContentFieldJsonCheckRejectsInvalidJson(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+
+        $this->assertContentFieldInsertRejected(
+            'invalid-json',
+            'json',
+            '{invalid',
+            'The database must reject invalid JSON for the json Content Field format.',
+        );
+    }
+
+    public function testEmptyImageAssignmentScopeValuesAreRejected(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+
+        $this->expectException(PDOException::class);
+        $this->insertImageAssignment(1, 1, 100, '', null);
+    }
+
+    public function testEmptyLanguageCodeIsNotAnAlternativeToNull(): void
+    {
+        $this->insertCategory(1, null, 'clothing', 'active');
+
+        $this->expectException(PDOException::class);
+        $this->insertContent(1, 1, '');
     }
 
     public function testStatusCheckRejectsUnknownValues(): void
@@ -149,17 +361,24 @@ final class CategorySchemaIntegrationTest extends TestCase
         );
     }
 
-    public function testTranslationForeignKeyRejectsMissingCategory(): void
+    public function testContentForeignKeyRejectsMissingCategory(): void
     {
         $this->expectException(PDOException::class);
-        $this->insertTranslation(1, 999, 'en-US');
+        $this->insertContent(1, 999, 'en-US');
+    }
+
+    public function testImageAssignmentForeignKeyRejectsMissingCategory(): void
+    {
+        $this->expectException(PDOException::class);
+        $this->insertImageAssignment(1, 999, 100, null, null);
     }
 
     public function testParentAndCategoryCannotBeDeletedWhileDependentsExist(): void
     {
         $this->insertCategory(1, null, 'clothing', 'active');
         $this->insertCategory(2, 1, 'shirts', 'active');
-        $this->insertTranslation(1, 1, 'en-US');
+        $this->insertContent(1, 1, 'en-US');
+        $this->insertImageAssignment(1, 1, 100, null, null);
 
         $this->expectException(PDOException::class);
         $this->connection()->exec('DELETE FROM `' . self::CATEGORY_TABLE . '` WHERE `id` = 1');
@@ -214,8 +433,8 @@ final class CategorySchemaIntegrationTest extends TestCase
             PREG_SPLIT_NO_EMPTY,
         );
 
-        if (!is_array($statements) || count($statements) !== 4) {
-            throw new RuntimeException('The canonical Category schema must contain exactly two tables and two triggers.');
+        if (!is_array($statements) || count($statements) !== 7) {
+            throw new RuntimeException('The canonical Category schema must contain exactly five tables and two triggers.');
         }
 
         $tableStatements = 0;
@@ -237,8 +456,8 @@ final class CategorySchemaIntegrationTest extends TestCase
             $this->connection()->exec($statement);
         }
 
-        if ($tableStatements !== 2 || $triggerStatements !== 2) {
-            throw new RuntimeException('The canonical Category schema must contain exactly two tables and two triggers.');
+        if ($tableStatements !== 5 || $triggerStatements !== 2) {
+            throw new RuntimeException('The canonical Category schema must contain exactly five tables and two triggers.');
         }
     }
 
@@ -247,7 +466,10 @@ final class CategorySchemaIntegrationTest extends TestCase
         $connection = $this->connection();
         $connection->exec('DROP TRIGGER IF EXISTS `' . self::INSERT_TRIGGER . '`');
         $connection->exec('DROP TRIGGER IF EXISTS `' . self::UPDATE_TRIGGER . '`');
-        $connection->exec('DROP TABLE IF EXISTS `' . self::TRANSLATION_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::CONTENT_FIELD_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::IMAGE_ASSIGNMENT_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::IMAGE_ROLE_TABLE . '`');
+        $connection->exec('DROP TABLE IF EXISTS `' . self::CONTENT_TABLE . '`');
         $connection->exec('DROP TABLE IF EXISTS `' . self::CATEGORY_TABLE . '`');
     }
 
@@ -321,10 +543,10 @@ final class CategorySchemaIntegrationTest extends TestCase
         return $nextId;
     }
 
-    private function insertTranslation(int $id, int $categoryId, string $languageCode): void
+    private function insertContent(int $id, int $categoryId, ?string $languageCode): void
     {
         $statement = $this->connection()->prepare(
-            'INSERT INTO `' . self::TRANSLATION_TABLE . '` '
+            'INSERT INTO `' . self::CONTENT_TABLE . '` '
             . '(`id`, `category_id`, `language_code`, `name`, `description`, `created_at`, `updated_at`, `deleted_at`) '
             . 'VALUES (:id, :category_id, :language_code, :name, :description, :created_at, :updated_at, :deleted_at)',
         );
@@ -340,6 +562,103 @@ final class CategorySchemaIntegrationTest extends TestCase
         ]);
     }
 
+    private function insertRole(int $id, string $roleKey, string $status): void
+    {
+        $statement = $this->connection()->prepare(
+            'INSERT INTO `' . self::IMAGE_ROLE_TABLE . '` '
+            . '(`id`, `role_key`, `status`, `created_at`, `updated_at`, `deleted_at`) '
+            . 'VALUES (:id, :role_key, :status, :created_at, :updated_at, :deleted_at)',
+        );
+        $statement->execute([
+            'id' => $id,
+            'role_key' => $roleKey,
+            'status' => $status,
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+            'deleted_at' => null,
+        ]);
+    }
+
+    private function insertImageAssignment(
+        int $id,
+        int $categoryId,
+        int $mediaAssetId,
+        ?string $languageCode,
+        ?string $platform,
+        ?int $roleId = null,
+        bool $isDefault = false,
+    ): void {
+        $statement = $this->connection()->prepare(
+            'INSERT INTO `' . self::IMAGE_ASSIGNMENT_TABLE . '` '
+            . '(`id`, `category_id`, `media_asset_id`, `role_id`, `language_code`, `platform`, '
+            . '`is_default`, `display_order`, `created_at`, `updated_at`, `deleted_at`) '
+            . 'VALUES (:id, :category_id, :media_asset_id, :role_id, :language_code, :platform, '
+            . ':is_default, :display_order, :created_at, :updated_at, :deleted_at)',
+        );
+        $statement->execute([
+            'id' => $id,
+            'category_id' => $categoryId,
+            'media_asset_id' => $mediaAssetId,
+            'role_id' => $roleId,
+            'language_code' => $languageCode,
+            'platform' => $platform,
+            'is_default' => $isDefault ? 1 : 0,
+            'display_order' => 1,
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+            'deleted_at' => null,
+        ]);
+    }
+
+    private function assertContentFieldInsertRejected(
+        string $fieldKey,
+        string $format,
+        string $value,
+        string $message,
+    ): void {
+        try {
+            $this->insertContentField($fieldKey, $format, $value);
+        } catch (PDOException) {
+            return;
+        }
+
+        self::fail($message);
+    }
+
+    private function assertImageRoleInsertRejected(string $roleKey, string $status, string $message): void
+    {
+        try {
+            $this->insertRole(1, $roleKey, $status);
+        } catch (PDOException) {
+            return;
+        }
+
+        self::fail($message);
+    }
+
+    private function insertContentField(string $fieldKey, string $format, string $value): void
+    {
+        $statement = $this->connection()->prepare(
+            'INSERT INTO `' . self::CONTENT_FIELD_TABLE . '` '
+            . '(`category_id`, `field_key`, `language_code`, `platform`, `format`, `value`, '
+            . '`display_order`, `created_at`, `updated_at`, `deleted_at`) '
+            . 'VALUES (:category_id, :field_key, :language_code, :platform, :format, :value, '
+            . ':display_order, :created_at, :updated_at, :deleted_at)',
+        );
+        $statement->execute([
+            'category_id' => 1,
+            'field_key' => $fieldKey,
+            'language_code' => null,
+            'platform' => null,
+            'format' => $format,
+            'value' => $value,
+            'display_order' => 1,
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+            'deleted_at' => null,
+        ]);
+    }
+
     /** @return list<string> */
     private function tableNames(): array
     {
@@ -347,8 +666,8 @@ final class CategorySchemaIntegrationTest extends TestCase
             'SELECT TABLE_NAME FROM information_schema.TABLES '
             . 'WHERE TABLE_SCHEMA = DATABASE() '
             . 'AND TABLE_NAME IN ('
-            . "'" . self::CATEGORY_TABLE . "', '" . self::TRANSLATION_TABLE . "')"
-            . ' ORDER BY TABLE_NAME',
+            . "'" . self::CATEGORY_TABLE . "', '" . self::CONTENT_TABLE . "', '" . self::CONTENT_FIELD_TABLE . "', '" . self::IMAGE_ROLE_TABLE . "', '" . self::IMAGE_ASSIGNMENT_TABLE . "')"
+            . ' ORDER BY BINARY TABLE_NAME',
         );
 
         if ($statement === false) {
@@ -378,7 +697,7 @@ final class CategorySchemaIntegrationTest extends TestCase
             . 'WHERE TRIGGER_SCHEMA = DATABASE() '
             . 'AND TRIGGER_NAME IN ('
             . "'" . self::INSERT_TRIGGER . "', '" . self::UPDATE_TRIGGER . "')"
-            . ' ORDER BY TRIGGER_NAME',
+            . ' ORDER BY BINARY TRIGGER_NAME',
         );
 
         if ($statement === false) {

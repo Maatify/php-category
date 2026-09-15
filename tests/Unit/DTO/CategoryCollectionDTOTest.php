@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Maatify\Category\Tests\Unit\DTO;
 
 use DateTimeImmutable;
-use Maatify\Category\DTO\CategoryCollectionDTO;
-use Maatify\Category\DTO\CategoryDTO;
-use Maatify\Category\Enum\CategoryStatusEnum;
+use Maatify\Category\Query\DTO\CategoryCollectionDTO;
+use Maatify\Category\Query\DTO\CategoryDTO;
+use Maatify\Category\Lifecycle\Enum\CategoryStatusEnum;
 use PHPUnit\Framework\TestCase;
 
 final class CategoryCollectionDTOTest extends TestCase
@@ -34,7 +34,7 @@ final class CategoryCollectionDTOTest extends TestCase
 
     private function category(int $id, string $code): CategoryDTO
     {
-        $timestamp = new DateTimeImmutable('2026-01-01 00:00:00 UTC');
+        $timestamp = new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo');
 
         return new CategoryDTO(
             id: $id,

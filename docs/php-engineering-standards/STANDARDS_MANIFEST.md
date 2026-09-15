@@ -1,4 +1,4 @@
-# Maatify/category Standards Manifest
+# Maatify/php-category Standards Manifest
 
 This file is the local resolver record for the repository's selective pinned
 adoption. It records composition and provenance; the underlying standards and
@@ -7,8 +7,8 @@ profiles remain the source of truth for their own rules.
 ## Adoption metadata
 
 - **Upstream repository:** `Maatify/php-engineering-standards`
-- **Adoption commit:** `6e44bd913cecf2a07fc9d8a956762691ca5a53bf`
-- **Adoption date:** `2026-09-09` (commit timestamp `2026-09-09T03:53:38+03:00`)
+- **Adoption commit:** `2fc57f9320f8a7f7147fb20abbcfa311fdf40c28`
+- **Adoption date:** `2026-09-14` (source commit timestamp `2026-09-13T13:33:41+03:00`)
 - **Floating upstream `main`:** not used
 - **Adoption model:** Selective Pinned Adoption
 
@@ -35,39 +35,40 @@ The inherited `composer-package` profile is pinned in the Control Set and is
 resolved for the `base-module` activation. Slim and Project-Aware Slim profiles
 are not active and are not copied.
 
-## Pinned Applicable Standards Set
+## Final Resolved Applicable Standards Set
 
-The resolved set is the union of the direct standards of the active profiles
-and the inherited `composer-package` profile. Versions below use the exact
-identity declared by each source file; no undeclared semantic version is
-invented.
+The set below is the final result of the two-stage resolution required by the
+pinned Adoption Standard: structural/transitive resolution produced the
+candidate references, then canonical applicability was evaluated separately
+for each active Profile/Scope against this repository's artifact facts. All
+eight candidates apply; no non-applicable candidate is recorded here.
 
-| Standard | Local path | Source version / identity | Resolved through |
+| Standard | Local path | Source Standard ID / Version | Resolved through |
 |---|---|---|---|
-| AI Collaboration Workflow | [`standards/ai/AI_COLLABORATION_WORKFLOW_AR.md`](standards/ai/AI_COLLABORATION_WORKFLOW_AR.md) | `5.1.0` | `repository-governance` |
-| GitHub Phase Stack Workflow | [`standards/GITHUB_PHASE_STACK_WORKFLOW_AR.md`](standards/GITHUB_PHASE_STACK_WORKFLOW_AR.md) | `2.0.0` | `repository-governance` |
-| Module Building Standard | [`standards/modules/MODULE_BUILDING_STANDARD.md`](standards/modules/MODULE_BUILDING_STANDARD.md) | `v1` | `base-module` |
-| Package Building Standard | [`standards/packages/PACKAGE_BUILDING_STANDARD.md`](standards/packages/PACKAGE_BUILDING_STANDARD.md) | `v1` | inherited `composer-package` |
-| Composer Package Standard | [`standards/packages/COMPOSER_PACKAGE_STANDARD.md`](standards/packages/COMPOSER_PACKAGE_STANDARD.md) | `v1` | inherited `composer-package` |
-| CI Workflow Standard | [`standards/packages/CI_WORKFLOW_STANDARD.md`](standards/packages/CI_WORKFLOW_STANDARD.md) | not declared in source | inherited `composer-package` |
-| Library Presentation Standard | [`standards/packages/LIBRARY_PRESENTATION_STANDARD.md`](standards/packages/LIBRARY_PRESENTATION_STANDARD.md) | not declared in source | inherited `composer-package` |
-| Testing Standard | [`standards/testing/TESTING_STANDARD.md`](standards/testing/TESTING_STANDARD.md) | `v1` | inherited `composer-package` |
+| AI Collaboration Workflow | [`standards/ai/AI_COLLABORATION_WORKFLOW_AR.md`](standards/ai/AI_COLLABORATION_WORKFLOW_AR.md) | `std-ai-collaboration-workflow` / `6.0.0` | `repository-governance` |
+| GitHub Phase Stack Workflow | [`standards/GITHUB_PHASE_STACK_WORKFLOW_AR.md`](standards/GITHUB_PHASE_STACK_WORKFLOW_AR.md) | `std-github-phase-stack-workflow` / `2.2.0` | `repository-governance` |
+| Module Building Standard | [`standards/modules/MODULE_BUILDING_STANDARD.md`](standards/modules/MODULE_BUILDING_STANDARD.md) | `std-module-building` / `1.0.0` | `base-module` |
+| Package Building Standard | [`standards/packages/PACKAGE_BUILDING_STANDARD.md`](standards/packages/PACKAGE_BUILDING_STANDARD.md) | `std-package-building` / `1.3.0` | inherited `composer-package` |
+| Composer Package Standard | [`standards/packages/COMPOSER_PACKAGE_STANDARD.md`](standards/packages/COMPOSER_PACKAGE_STANDARD.md) | `std-composer-package` / `1.2.0` | inherited `composer-package` |
+| CI Workflow Standard | [`standards/packages/CI_WORKFLOW_STANDARD.md`](standards/packages/CI_WORKFLOW_STANDARD.md) | `std-ci-workflow` / `1.1.0` | inherited `composer-package` |
+| Library Presentation Standard | [`standards/packages/LIBRARY_PRESENTATION_STANDARD.md`](standards/packages/LIBRARY_PRESENTATION_STANDARD.md) | `std-library-presentation` / `1.0.1` | inherited `composer-package` |
+| Testing Standard | [`standards/testing/TESTING_STANDARD.md`](standards/testing/TESTING_STANDARD.md) | `std-testing` / `1.1.0` | inherited `composer-package` |
 
-### Auditable profile resolution
+### Auditable final profile resolution
 
 ```text
 repository-governance (/)
-└── AI Collaboration Workflow 5.1.0
-└── GitHub Phase Stack Workflow 2.0.0
+└── AI Collaboration Workflow 6.0.0
+└── GitHub Phase Stack Workflow 2.2.0
 
 base-module (/)
-├── Module Building Standard v1
+├── Module Building Standard 1.0.0
 └── composer-package (inherited)
-    ├── Package Building Standard v1
-    ├── Composer Package Standard v1
-    ├── CI Workflow Standard (source version not declared)
-    ├── Library Presentation Standard (source version not declared)
-    └── Testing Standard v1
+    ├── Package Building Standard 1.3.0
+    ├── Composer Package Standard 1.2.0
+    ├── CI Workflow Standard 1.1.0
+    ├── Library Presentation Standard 1.0.1
+    └── Testing Standard 1.1.0
 ```
 
 `STANDARDS_ADOPTION_STANDARD_AR.md` is part of the Control Set and is not an
@@ -82,7 +83,9 @@ engineering standard resolved by either active Profile.
 
 - Every retained pinned standard and profile is byte-for-byte equal to its
   upstream blob at the adoption commit.
-- Relative links remain within the retained local adoption set.
+- Relative links between retained files remain valid. Cross-references to
+  non-retained upstream standards are checked against the exact adoption commit
+  and do not add those standards to the local Adoption Set.
 - Unused profiles, unused module standards, `docs/audits/`, and `docs/decisions/`
   are not copied into this repository's adoption set.
 - Normal engineering tasks resolve from this manifest and the local pinned

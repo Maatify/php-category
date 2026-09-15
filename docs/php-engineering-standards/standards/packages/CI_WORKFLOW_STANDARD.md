@@ -1,5 +1,11 @@
 # CI Workflow Standard
 
+## Standard Metadata
+
+- **Standard ID:** `std-ci-workflow`
+- **Standard Version:** `1.1.0`
+- **Standard Version Format:** `MAJOR.MINOR.PATCH`
+
 This document outlines the standard CI workflow architecture for any standalone Composer package in the Maatify ecosystem. It ensures a consistent, high-quality testing and static analysis baseline across all packages without coupling to any specific project.
 
 ## 1. Normative Language
@@ -14,6 +20,30 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 This standard governs CI execution and enforcement. The testing architecture and regression protection requirements are exclusively governed by the [Testing Standard](../testing/TESTING_STANDARD.md).
 Repositories with required system/E2E suites MUST execute them as CI gates appropriate to that repository. CI MUST make it impossible to treat a required failing E2E/system suite as successful verification.
+
+### 2.1 Local Quality-Gate Parity
+
+For every applicable required quality gate in this Standard, the repository MUST document a local command or command sequence that runs the same verification contract. This includes Composer validation and dependency resolution, platform requirements, PHP syntax, PHPStan, code style, whitespace, applicable test suites, schema verification, Composer audit, workflow lint, and the Consumer Verification Harness.
+
+Every CI gate MUST invoke a repository-owned command or script, or a documented command sequence, that a developer can run locally to prove the same verification contract. Runner-specific service provisioning, environment setup, dependency matrices, and job orchestration MAY differ, but MUST NOT change what the gate verifies. Workflow YAML MAY coordinate those concerns; it MUST NOT be the only place where a maintainer can discover or understand the verification logic. A repository MUST document the prerequisites and service setup needed to run each applicable gate locally.
+
+Local parity means that the gate is runnable locally with equivalent verification semantics; it does not require a developer workstation to reproduce the GitHub runner. This Standard does not require one universal command or Composer script name. The repository MUST use its actual maintained commands and document the mapping from local invocation to CI invocation. GitHub CI remains the final evidence for the integrated runner environment.
+
+### 2.2 Consumer Verification Harness Gate
+
+The [Testing Standard](../testing/TESTING_STANDARD.md) owns Consumer Verification Harness applicability and evidence semantics. This Standard owns only its CI execution and enforcement.
+
+When the Harness is required for an artifact, CI MUST execute the Harness defined by the Testing Standard as a required applicable gate using the repository-owned local invocation documented under §2.1. CI orchestration MUST preserve the clean-state and repeatability requirements in the Testing Standard, and the executed Harness MUST prove production autoload. For a Base Module, the Harness MUST consume the Module Artifact Root's Composer contract as the dependency; the Host root MUST NOT substitute for the Artifact Root, as defined by the [Composer Package Standard](COMPOSER_PACKAGE_STANDARD.md).
+
+The Harness gate MUST fail closed. Missing or incomplete setup, unavailable required dependencies or services, and an unexpected skip MUST fail verification when the Harness is relevant. The gate MUST NOT be hidden behind `continue-on-error`, `|| true`, or a silent skip. Applicable real-service requirements continue to follow Section 11, and baseline CI MUST NOT require production secrets.
+
+Repositories using change-relevance detection for an applicable Harness MUST configure it from that Harness's actual implementation. Changes to the consumer project, fixture, template, script, or other files that affect its verification MUST make the Harness relevant. This Standard does not define a universal Harness path list.
+
+### 2.3 Affected Checks and Full Integration Gate
+
+After a small remediation or micro-fix, CI MAY run the affected checks selected by risk instead of repeating an expensive full matrix, provided all checks directly related to the changed contract still run. Risk-based selection MUST NOT remove evidence for the behavior, compatibility, or integration boundary changed by the fix.
+
+At a meaningful integration boundary, CI MUST run the full applicable verification set for the integrated change. Boundaries include closing a substantial Work Unit or Phase, moving an Integration Draft to its next stage when its changed contract is affected, final acceptance for the integration boundary, and changes that expand compatibility or integration behavior. The full set includes all applicable required quality, dependency, PHP-version, test, real-service, package, and workflow checks defined by this Standard.
 
 Repositories MAY organize their workflows into multiple files (e.g., separating `quality`/`static analysis`, `tests`, `integration`, and `dependency compatibility`).
 However, workflows MUST have:
@@ -57,14 +87,14 @@ Examples of relevant paths:
 * `composer.json`
 * `composer.lock`
 * `phpstan.neon`
-* `phpunit.xml` or `phpunit.xml.dist`
+* Actual test-runner configuration files used by the repository (for example, `phpunit.xml` or `phpunit.xml.dist` when PHPUnit is used)
 * `.php-cs-fixer.php`
 * `.github/workflows/<workflow>.yml`
 
 Rules:
 * Include `composer.lock` ONLY when the repository tracks it.
 * Never require a reusable library to add `composer.lock` solely for CI path filtering.
-* Include the actual PHPUnit configuration filename used by the repository.
+* Include the actual test-runner configuration files used by the repository when they affect test execution.
 * Include package-owned schema and SQL fixture paths used by Integration tests.
 * Include the workflow itself and all quality-tool configuration files that affect it.
 * Documentation changes SHOULD trigger heavy checks only when the workflow validates documentation code blocks, generated files, or examples.
@@ -152,7 +182,7 @@ The standard MUST require, where applicable:
   * MUST NOT use inline suppressions merely to make CI pass.
 * **Code style**: When a supported formatter configuration (e.g., `.php-cs-fixer.php`) exists, CI MUST run a non-mutating check (e.g., `vendor/bin/php-cs-fixer fix --dry-run --diff`). CI MUST NEVER rewrite and commit formatting automatically during a required verification job.
 * **Whitespace verification**: CI MUST detect and fail on applicable whitespace defects such as trailing whitespace, malformed whitespace introduced in tracked text/source files, or equivalent repository-specific whitespace integrity failures. A canonical Git-aware verification such as `git diff --check` MAY be documented as an accepted/basic mechanism where appropriate, provided it works correctly for the actual comparison context. This must be treated as a real required quality check, separate from generic code-style formatting.
-* **Full test suite**: Where separate Unit, Regression, and Integration suites exist, run each explicitly. CI MUST also run the complete PHPUnit suite in at least one canonical environment.
+* **Complete maintained applicable test suite**: CI MUST run the complete maintained test suite using the repository's actual test runner and tooling. Where separate Unit, Regression, and Integration suites exist, each MUST run explicitly. A runner failure MUST fail CI deterministically; a missing required runner, configuration, dependency, or setup MUST fail closed.
 * **Example syntax validation**
 * **Composer security audit**
 * **Workflow syntax/lint validation**
@@ -278,6 +308,7 @@ The final gate MUST:
 
 As a **Maatify Internal Policy**, repositories MUST NOT require individual matrix child jobs directly; a stable aggregate gate MUST be used instead to avoid matrix ambiguity.
 The gate MUST inspect `needs.*.result` which returns one of `success`, `failure`, `cancelled`, or `skipped`. The `skipped` state is only acceptable when an approved relevance detector proves the job was intentionally bypassed; any unexpected `skipped` state for a relevant job MUST fail the gate. The gate MUST NOT hide `failure` or `cancelled` or equivalent unsuccessful states.
+When a Consumer Verification Harness is required and relevant, its job MUST be included among the upstream requirements inspected by the stable aggregate gate. A skipped Harness job is acceptable only when the approved relevance detector proves it is not relevant.
 
 ## 17. Trigger Events
 
@@ -293,7 +324,7 @@ Scheduled dependency-drift verification MAY be added for reusable libraries.
 This standard distinguishes between universal rules and repository-specific values.
 
 * **Universal rules**: PHPStan max, real Integration services, minimum/latest PHP coverage, stable required gates, Composer validation, no hidden failures, least privilege.
-* **Repository-specific values**: exact PHP versions, exact service versions, actual PHPUnit configuration filename, actual suite names, schema paths, environment variable names, service ports, package-owned trigger/table names, whether `composer.lock` is tracked.
+* **Repository-specific values**: exact PHP versions, exact service versions, actual test-runner configuration files, actual suite names, schema paths, environment variable names, service ports, package-owned trigger/table names, whether `composer.lock` is tracked.
 
 Repository-specific values MUST be documented by each package, but MUST NOT be hardcoded into the universal standard.
 
@@ -314,7 +345,7 @@ Any standalone Composer package in the Maatify ecosystem MUST verify the followi
 * [ ] Unit suite passes where applicable
 * [ ] Regression suite passes where applicable
 * [ ] Integration suite uses real services where applicable
-* [ ] full PHPUnit suite passes where PHPUnit/tests are applicable
+* [ ] complete maintained applicable test suite passes using the repository's actual test runner and tooling
 * [ ] example PHP files pass syntax validation where examples exist
 * [ ] minimum supported PHP is tested
 * [ ] latest supported PHP is tested
@@ -328,3 +359,6 @@ Any standalone Composer package in the Maatify ecosystem MUST verify the followi
 * [ ] branch protection requires stable gates only
 * [ ] no continue-on-error or hidden failures exist
 * [ ] package-created service/database state is cleaned up where Integration tests create such state
+* [ ] every applicable required gate has a documented local invocation with the same verification contract as its CI invocation
+* [ ] a required Consumer Verification Harness runs as a fail-closed gate, preserves clean-state repeatability, and is included in the stable aggregate gate when relevant
+* [ ] meaningful integration boundaries run the full applicable verification set, while reduced runs still include every check tied directly to a changed contract

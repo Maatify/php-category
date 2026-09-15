@@ -4,29 +4,37 @@ declare(strict_types=1);
 
 namespace Maatify\Category\Tests\Integration;
 
-use Maatify\Category\Contract\CategoryCommandServiceInterface;
-use Maatify\Category\Command\CreateCategoryCommand;
-use Maatify\Category\Command\CreateCategoryTranslationCommand;
-use Maatify\Category\Command\MoveCategoryCommand;
-use Maatify\Category\Command\RestoreCategoryCommand;
-use Maatify\Category\Command\RestoreCategoryTranslationCommand;
-use Maatify\Category\Command\SoftDeleteCategoryCommand;
-use Maatify\Category\Command\SoftDeleteCategoryTranslationCommand;
-use Maatify\Category\Command\UpdateCategoryDisplayOrderCommand;
-use Maatify\Category\Command\UpdateCategoryStatusCommand;
-use Maatify\Category\Command\UpdateCategoryTranslationCommand;
-use Maatify\Category\Enum\CategoryStatusEnum;
-use Maatify\Category\Exception\CategoryCycleException;
-use Maatify\Category\Exception\CategoryHasNonDeletedChildrenException;
-use Maatify\Category\Exception\CategoryTranslationAlreadyExistsException;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryCommandRepository;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryQueryReader;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryTranslationCommandRepository;
-use Maatify\Category\Infrastructure\Transaction\PdoCategoryTransaction;
-use Maatify\Category\Service\CategoryCommandService;
+use Maatify\Category\Factory\CategoryFactory;
+use Maatify\Category\Api\CategoryApiInterface;
+use Maatify\Category\Lifecycle\Command\CreateCategoryCommand;
+use Maatify\Category\Content\Mutation\Command\CreateCategoryContentCommand;
+use Maatify\Category\Hierarchy\Command\MoveCategoryCommand;
+use Maatify\Category\Lifecycle\Command\RestoreCategoryCommand;
+use Maatify\Category\Content\Mutation\Command\RestoreCategoryContentCommand;
+use Maatify\Category\Lifecycle\Command\SoftDeleteCategoryCommand;
+use Maatify\Category\Content\Mutation\Command\SoftDeleteCategoryContentCommand;
+use Maatify\Category\Ordering\Command\UpdateCategoryDisplayOrderCommand;
+use Maatify\Category\Lifecycle\Command\UpdateCategoryStatusCommand;
+use Maatify\Category\Content\Mutation\Command\UpdateCategoryContentCommand;
+use Maatify\Category\Content\Mutation\Command\UpdateCategoryContentDescriptionCommand;
+use Maatify\Category\Content\Mutation\Command\UpdateCategoryContentNameCommand;
+use Maatify\Category\Common\Enum\CategoryDeletedStateEnum;
+use Maatify\Category\Lifecycle\Enum\CategoryStatusEnum;
+use Maatify\Category\Hierarchy\Exception\CategoryCycleException;
+use Maatify\Category\Lifecycle\Exception\CategoryHasNonDeletedChildrenException;
+use Maatify\Category\Exception\CategoryNotFoundException;
+use Maatify\Category\Content\Mutation\Exception\CategoryContentAlreadyExistsException;
+use Maatify\Category\Content\Exception\CategoryContentNotFoundException;
+use Maatify\Category\Query\Infrastructure\PdoCategoryManagementReadQuery;
+use Maatify\Category\Query\Infrastructure\PdoCategoryQueryReader;
+use Maatify\Category\Query\Infrastructure\PdoCategoryReadQuery;
+use Maatify\Category\Content\Query\Infrastructure\PdoCategoryContentManagementReadQuery;
+use Maatify\Category\Content\Query\Infrastructure\PdoCategoryContentQueryReader;
+use Maatify\Category\Content\Query\Infrastructure\PdoCategoryContentReadQuery;
+use Maatify\Category\Content\Api\Contract\ContentApiInterface;
 use Maatify\Category\Tests\Integration\Support\CategoryMySqlIntegrationTestCase;
 use Maatify\Category\Tests\Integration\Support\FixedCategoryClock;
-use Maatify\Persistence\Pdo\Ordering\ScopedOrderingManager;
+use Maatify\Persistence\Pdo\Transaction\PdoTransactionRunner;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -34,11 +42,80 @@ use Throwable;
 
 final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
 {
+    public function testHostClockTimezoneIsPreservedAcrossPersistenceAndAllHydrationAdapters(): void
+    {
+        $connection = $this->connection();
+        $createClock = new FixedCategoryClock('2026-03-01 14:30:45 Africa/Cairo');
+        $createService = $this->service($connection, $createClock);
+        $categoryId = $createService->create(new CreateCategoryCommand('host-timezone-category'));
+        $contentId = $this->contentService($connection, $createClock)->create(
+            new CreateCategoryContentCommand($categoryId, null, 'Host clock content', null),
+        );
+
+        $updateClock = new FixedCategoryClock('2026-03-01 15:45:12 Africa/Cairo');
+        $updateService = $this->service($connection, $updateClock);
+        $this->contentService($connection, $updateClock)->update(new UpdateCategoryContentCommand(
+            $contentId,
+            'Updated host clock content',
+            null,
+        ));
+
+        $timestamps = $connection->prepare(
+            'SELECT `created_at`, `updated_at` FROM `maa_category_category_contents` WHERE `id` = :id',
+        );
+        $timestamps->execute(['id' => $contentId]);
+        /** @var array{created_at: string, updated_at: string}|false $storedTimestamps */
+        $storedTimestamps = $timestamps->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($storedTimestamps);
+        self::assertSame('2026-03-01 14:30:45', $storedTimestamps['created_at']);
+        self::assertSame('2026-03-01 15:45:12', $storedTimestamps['updated_at']);
+
+        $internalReader = new PdoCategoryQueryReader($connection, $updateClock);
+        $visibleReader = new PdoCategoryReadQuery($connection, $updateClock);
+        $managementReader = new PdoCategoryManagementReadQuery($connection, $updateClock);
+        $internalContentReader = new PdoCategoryContentQueryReader($connection, $updateClock);
+        $visibleContentReader = new PdoCategoryContentReadQuery($connection, $updateClock);
+        $managementContentReader = new PdoCategoryContentManagementReadQuery($connection, $updateClock);
+
+        $internalCategory = $internalReader->findById($categoryId);
+        $visibleCategory = $visibleReader->findVisibleById($categoryId);
+        $managementCategory = $managementReader->findById(
+            $categoryId,
+            CategoryDeletedStateEnum::NON_DELETED,
+        );
+        self::assertNotNull($internalCategory);
+        self::assertNotNull($visibleCategory);
+        self::assertNotNull($managementCategory);
+        foreach ([$internalCategory, $visibleCategory, $managementCategory] as $category) {
+            self::assertSame('Africa/Cairo', $category->createdAt->getTimezone()->getName());
+            self::assertSame('2026-03-01 14:30:45', $category->createdAt->format('Y-m-d H:i:s'));
+        }
+
+        $internalContent = $internalContentReader->findContentById($contentId);
+        $visibleContents = $visibleContentReader->listVisibleContents($categoryId);
+        $managementContent = $managementContentReader->findContentById(
+            $contentId,
+            CategoryDeletedStateEnum::NON_DELETED,
+        );
+        self::assertNotNull($internalContent);
+        self::assertNotNull($managementContent);
+        self::assertCount(1, $visibleContents);
+        $visibleContent = null;
+        foreach ($visibleContents as $content) {
+            $visibleContent = $content;
+        }
+        self::assertNotNull($visibleContent);
+        foreach ([$internalContent, $visibleContent, $managementContent] as $content) {
+            self::assertSame('Africa/Cairo', $content->updatedAt->getTimezone()->getName());
+            self::assertSame('2026-03-01 15:45:12', $content->updatedAt->format('Y-m-d H:i:s'));
+        }
+    }
+
     public function testApplicationClockAndAllStateReaderSupportLifecycleIdentity(): void
     {
         $clock = new FixedCategoryClock();
         $service = $this->service($this->connection(), $clock);
-        $queryReader = new PdoCategoryQueryReader($this->connection());
+        $queryReader = new PdoCategoryQueryReader($this->connection(), $clock);
 
         $categoryId = $service->create(new CreateCategoryCommand('root-category'));
         self::assertSame(1, $categoryId);
@@ -101,61 +178,161 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         ], $this->ordersForScope($connection, $firstRootId));
     }
 
-    public function testTranslationLifecycleIsPackageOwnedAndPreservesLogicalIdentity(): void
+    public function testContentLifecycleIsPackageOwnedAndPreservesLogicalIdentity(): void
     {
         $connection = $this->connection();
-        $service = $this->service($connection, new FixedCategoryClock('2026-01-03 00:00:00 UTC'));
-        $queryReader = new PdoCategoryQueryReader($connection);
-        $categoryId = $service->create(new CreateCategoryCommand('translation-lifecycle-category'));
+        $service = $this->service($connection, new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo'));
+        $contentService = $this->contentService($connection, new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo'));
+        $queryReader = new PdoCategoryContentQueryReader($connection, new FixedCategoryClock());
+        $categoryId = $service->create(new CreateCategoryCommand('content-lifecycle-category'));
 
-        $translationId = $service->createTranslation(
-            new CreateCategoryTranslationCommand($categoryId, 'en-US', 'Shirts', 'Base description'),
+        $contentId = $contentService->create(
+            new CreateCategoryContentCommand($categoryId, null, 'Shirts', 'Base description'),
         );
-        $created = $queryReader->findTranslationById($translationId);
+        $created = $queryReader->findContentById($contentId);
         self::assertNotNull($created);
-        self::assertSame($translationId, $created->id);
+        self::assertSame($contentId, $created->id);
         self::assertSame($categoryId, $created->categoryId);
-        self::assertSame('en-US', $created->languageCode);
+        self::assertNull($created->languageCode);
 
-        $service->updateTranslation(new UpdateCategoryTranslationCommand(
-            $translationId,
+        $contentService->update(new UpdateCategoryContentCommand(
+            $contentId,
             'قمصان',
             'وصف',
         ));
-        $updated = $queryReader->findTranslationById($translationId);
+        $updated = $queryReader->findContentById($contentId);
         self::assertNotNull($updated);
-        self::assertSame($translationId, $updated->id);
+        self::assertSame($contentId, $updated->id);
         self::assertSame($categoryId, $updated->categoryId);
-        self::assertSame('en-US', $updated->languageCode);
+        self::assertNull($updated->languageCode);
         self::assertSame('قمصان', $updated->name);
 
-        $service->softDeleteTranslation(new SoftDeleteCategoryTranslationCommand($translationId));
-        $deleted = $queryReader->findTranslationById($translationId);
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($contentId));
+        $deleted = $queryReader->findContentById($contentId);
         self::assertNotNull($deleted);
         self::assertNotNull($deleted->deletedAt);
-        self::assertSame($translationId, $deleted->id);
+        self::assertSame($contentId, $deleted->id);
 
-        $service->restoreTranslation(new RestoreCategoryTranslationCommand($translationId));
-        $restored = $queryReader->findTranslationById($translationId);
+        $contentService->restore(new RestoreCategoryContentCommand($contentId));
+        $restored = $queryReader->findContentById($contentId);
         self::assertNotNull($restored);
-        self::assertSame($translationId, $restored->id);
+        self::assertSame($contentId, $restored->id);
         self::assertSame($categoryId, $restored->categoryId);
-        self::assertSame('en-US', $restored->languageCode);
+        self::assertNull($restored->languageCode);
         self::assertNull($restored->deletedAt);
         self::assertSame('قمصان', $restored->name);
     }
 
-    public function testTranslationCreationRejectsDuplicateLogicalIdentityIncludingSoftDeletedRows(): void
+    public function testContentInlineMutationsPreserveIdentityAndRejectDeletedContent(): void
+    {
+        $connection = $this->connection();
+        $clock = new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo');
+        $categoryService = $this->service($connection, $clock);
+        $contentService = $this->contentService($connection, $clock);
+        $categoryId = $categoryService->create(new CreateCategoryCommand('content-inline-category'));
+        $contentId = $contentService->create(
+            new CreateCategoryContentCommand($categoryId, 'en-US', 'Original name', 'Original description'),
+        );
+
+        $contentService->updateName(new UpdateCategoryContentNameCommand($contentId, 'Inline name'));
+        $updated = $contentService->getByIdForManagement($contentId);
+        self::assertSame('Inline name', $updated->name);
+        self::assertSame('Original description', $updated->description);
+        self::assertSame($categoryId, $updated->categoryId);
+        self::assertSame('en-US', $updated->languageCode);
+
+        $contentService->updateDescription(new UpdateCategoryContentDescriptionCommand($contentId, null));
+        $updated = $contentService->getByIdForManagement($contentId);
+        self::assertSame('Inline name', $updated->name);
+        self::assertNull($updated->description);
+
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($contentId));
+        $this->expectException(CategoryContentNotFoundException::class);
+        $contentService->updateName(new UpdateCategoryContentNameCommand($contentId, 'Must fail'));
+    }
+
+    public function testContentMutationsFollowParentLifecycleStateContractOnMySql(): void
+    {
+        $connection = $this->connection();
+        $service = $this->service($connection, new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo'));
+        $contentService = $this->contentService($connection, new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo'));
+        $queryReader = new PdoCategoryContentQueryReader($connection, new FixedCategoryClock());
+
+        $inactiveCategoryId = $service->create(new CreateCategoryCommand('inactive-content-parent'));
+        $service->updateStatus(
+            new UpdateCategoryStatusCommand($inactiveCategoryId, CategoryStatusEnum::INACTIVE),
+        );
+
+        $inactiveContentId = $contentService->create(
+            new CreateCategoryContentCommand($inactiveCategoryId, 'en-US', 'Inactive parent', null),
+        );
+        $inactiveContent = $queryReader->findContentById($inactiveContentId);
+        self::assertNotNull($inactiveContent);
+        self::assertSame($inactiveCategoryId, $inactiveContent->categoryId);
+
+        $contentService->update(
+            new UpdateCategoryContentCommand($inactiveContentId, 'Updated inactive parent', null),
+        );
+        $inactiveContent = $queryReader->findContentById($inactiveContentId);
+        self::assertNotNull($inactiveContent);
+        self::assertSame('Updated inactive parent', $inactiveContent->name);
+
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($inactiveContentId));
+        $inactiveContent = $queryReader->findContentById($inactiveContentId);
+        self::assertNotNull($inactiveContent);
+        self::assertNotNull($inactiveContent->deletedAt);
+
+        $contentService->restore(new RestoreCategoryContentCommand($inactiveContentId));
+        $inactiveContent = $queryReader->findContentById($inactiveContentId);
+        self::assertNotNull($inactiveContent);
+        self::assertNull($inactiveContent->deletedAt);
+
+        $deletedCategoryId = $service->create(new CreateCategoryCommand('deleted-content-parent'));
+        $deletedContentId = $contentService->create(
+            new CreateCategoryContentCommand($deletedCategoryId, 'en-US', 'Deleted parent', null),
+        );
+        $service->softDelete(new SoftDeleteCategoryCommand($deletedCategoryId));
+
+        try {
+            $contentService->create(
+                new CreateCategoryContentCommand($deletedCategoryId, 'ar-EG', 'Rejected', null),
+            );
+            self::fail('A Content must not be created under a soft-deleted Category.');
+        } catch (CategoryNotFoundException) {
+            // Creation requires a non-deleted parent Category.
+        }
+
+        $contentService->update(
+            new UpdateCategoryContentCommand($deletedContentId, 'Updated deleted parent', null),
+        );
+        $deletedContent = $queryReader->findContentById($deletedContentId);
+        self::assertNotNull($deletedContent);
+        self::assertSame('Updated deleted parent', $deletedContent->name);
+
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($deletedContentId));
+        $deletedContent = $queryReader->findContentById($deletedContentId);
+        self::assertNotNull($deletedContent);
+        self::assertNotNull($deletedContent->deletedAt);
+
+        $contentService->restore(new RestoreCategoryContentCommand($deletedContentId));
+        $restored = $queryReader->findContentById($deletedContentId);
+        self::assertNotNull($restored);
+        self::assertNull($restored->deletedAt);
+        self::assertSame($deletedCategoryId, $restored->categoryId);
+    }
+
+    public function testContentCreationRejectsDuplicateLogicalIdentityIncludingSoftDeletedRows(): void
     {
         $service = $this->service($this->connection(), new FixedCategoryClock());
-        $categoryId = $service->create(new CreateCategoryCommand('translation-identity-category'));
-        $command = new CreateCategoryTranslationCommand($categoryId, 'en-US', 'Shirts', null);
+        $contentService = $this->contentService($this->connection(), new FixedCategoryClock());
+        $categoryId = $service->create(new CreateCategoryCommand('content-identity-category'));
+        $command = new CreateCategoryContentCommand($categoryId, null, 'Shirts', null);
 
-        $translationId = $service->createTranslation($command);
-        $service->softDeleteTranslation(new SoftDeleteCategoryTranslationCommand($translationId));
+        $contentId = $contentService->create($command);
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($contentId));
 
-        $this->expectException(CategoryTranslationAlreadyExistsException::class);
-        $service->createTranslation($command);
+        $this->expectException(CategoryContentAlreadyExistsException::class);
+        $contentService->create($command);
     }
 
     public function testSoftDeleteChecksNonDeletedChildrenAndAllowsTheParentAfterChildDeletion(): void
@@ -174,7 +351,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         $service->softDelete(new SoftDeleteCategoryCommand($childId));
         $service->softDelete(new SoftDeleteCategoryCommand($parentId));
 
-        $queryReader = new PdoCategoryQueryReader($this->connection());
+        $queryReader = new PdoCategoryQueryReader($this->connection(), new FixedCategoryClock());
         self::assertNull($queryReader->findActiveById($parentId));
         self::assertNotNull($queryReader->findById($parentId));
     }
@@ -205,11 +382,11 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
     public function testSharedOrderingApiMovesRootRowsAndUpdatesTimestampAtomically(): void
     {
         $connection = $this->connection();
-        $createService = $this->service($connection, new FixedCategoryClock('2026-01-03 00:00:00 UTC'));
+        $createService = $this->service($connection, new FixedCategoryClock('2026-01-03 00:00:00 Africa/Cairo'));
         $firstId = $createService->create(new CreateCategoryCommand('root-ordering-first'));
         $secondId = $createService->create(new CreateCategoryCommand('root-ordering-second'));
 
-        $updateService = $this->service($connection, new FixedCategoryClock('2026-01-04 00:00:00 UTC'));
+        $updateService = $this->service($connection, new FixedCategoryClock('2026-01-04 00:00:00 Africa/Cairo'));
         $updateService->updateDisplayOrder(new UpdateCategoryDisplayOrderCommand($secondId, 1));
 
         $ordersStatement = $connection->query(
@@ -233,7 +410,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
 
     public function testTransactionPreservesTheOriginalThrowableWhenTransactionIsAlreadyClosed(): void
     {
-        $transaction = new PdoCategoryTransaction($this->connection());
+        $transaction = new PdoTransactionRunner($this->connection());
         $original = new RuntimeException('original transaction failure');
 
         $thrown = null;
@@ -270,7 +447,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
 
         $locker = $this->newConnection();
         $locker->beginTransaction();
-        $lockingReader = new PdoCategoryQueryReader($locker);
+        $lockingReader = new PdoCategoryQueryReader($locker, new FixedCategoryClock());
         self::assertNotNull($lockingReader->findActiveByIdForUpdate($targetParentId));
 
         $blockedConnection = $this->newConnection();
@@ -289,7 +466,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         }
 
         $blockedService->move(new MoveCategoryCommand($categoryId, $targetParentId));
-        self::assertSame($targetParentId, (new PdoCategoryQueryReader($blockedConnection))->findById($categoryId)?->parentId);
+        self::assertSame($targetParentId, (new PdoCategoryQueryReader($blockedConnection, new FixedCategoryClock()))->findById($categoryId)?->parentId);
         $blockedConnection = null;
     }
 
@@ -301,7 +478,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
 
         $locker = $this->newConnection();
         $locker->beginTransaction();
-        self::assertNotNull((new PdoCategoryQueryReader($locker))->findActiveByIdForUpdate($categoryId));
+        self::assertNotNull((new PdoCategoryQueryReader($locker, new FixedCategoryClock()))->findActiveByIdForUpdate($categoryId));
 
         $blockedConnection = $this->newConnection();
         $blockedConnection->exec('SET SESSION innodb_lock_wait_timeout = 1');
@@ -319,7 +496,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         }
 
         $blockedService->softDelete(new SoftDeleteCategoryCommand($categoryId));
-        self::assertNull((new PdoCategoryQueryReader($blockedConnection))->findActiveById($categoryId));
+        self::assertNull((new PdoCategoryQueryReader($blockedConnection, new FixedCategoryClock()))->findActiveById($categoryId));
         $blockedConnection = null;
     }
 
@@ -331,7 +508,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
 
         $locker = $this->newConnection();
         $locker->beginTransaction();
-        self::assertNotNull((new PdoCategoryQueryReader($locker))->findActiveByIdForUpdate($categoryId));
+        self::assertNotNull((new PdoCategoryQueryReader($locker, new FixedCategoryClock()))->findActiveByIdForUpdate($categoryId));
 
         $blockedConnection = $this->newConnection();
         $blockedConnection->exec('SET SESSION innodb_lock_wait_timeout = 1');
@@ -351,7 +528,7 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         $blockedService->updateStatus(new UpdateCategoryStatusCommand($categoryId, CategoryStatusEnum::INACTIVE));
         self::assertSame(
             CategoryStatusEnum::INACTIVE,
-            (new PdoCategoryQueryReader($blockedConnection))->findById($categoryId)?->status,
+            (new PdoCategoryQueryReader($blockedConnection, new FixedCategoryClock()))->findById($categoryId)?->status,
         );
         $blockedConnection = null;
     }
@@ -376,14 +553,13 @@ final class CategoryPdoIntegrationTest extends CategoryMySqlIntegrationTestCase
         return $normalized;
     }
 
-    private function service(PDO $connection, FixedCategoryClock $clock): CategoryCommandServiceInterface
+    private function service(PDO $connection, FixedCategoryClock $clock): CategoryApiInterface
     {
-        return new CategoryCommandService(
-            new PdoCategoryCommandRepository($connection, new ScopedOrderingManager()),
-            new PdoCategoryQueryReader($connection),
-            new PdoCategoryTranslationCommandRepository($connection),
-            new PdoCategoryTransaction($connection),
-            $clock,
-        );
+        return CategoryFactory::create($connection, $clock)->categories();
+    }
+
+    private function contentService(PDO $connection, FixedCategoryClock $clock): ContentApiInterface
+    {
+        return CategoryFactory::create($connection, $clock)->contents();
     }
 }

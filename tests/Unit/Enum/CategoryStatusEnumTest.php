@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Maatify\Category\Tests\Unit\Enum;
 
-use Maatify\Category\Enum\CategoryStatusEnum;
+use Maatify\Category\Lifecycle\Enum\CategoryStatusEnum;
 use PHPUnit\Framework\TestCase;
 
 final class CategoryStatusEnumTest extends TestCase

@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace Maatify\Category\Tests\Unit\DTO;
 
 use DateTimeImmutable;
-use Maatify\Category\DTO\CategoryDTO;
-use Maatify\Category\Enum\CategoryStatusEnum;
-use Maatify\Category\Exception\CategoryInvalidArgumentException;
+use Maatify\Category\Query\DTO\CategoryDTO;
+use Maatify\Category\Lifecycle\Enum\CategoryStatusEnum;
+use Maatify\Category\Common\Exception\CategoryInvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
 final class CategoryDTOTest extends TestCase
 {
     public function testItRepresentsCategoryIdentityAndLifecycleFields(): void
     {
-        $createdAt = new DateTimeImmutable('2026-01-01 00:00:00 UTC');
-        $updatedAt = new DateTimeImmutable('2026-01-02 00:00:00 UTC');
-        $deletedAt = new DateTimeImmutable('2026-01-03 00:00:00 UTC');
+        $createdAt = new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo');
+        $updatedAt = new DateTimeImmutable('2026-01-02 00:00:00 Africa/Cairo');
+        $deletedAt = new DateTimeImmutable('2026-01-03 00:00:00 Africa/Cairo');
 
         $category = new CategoryDTO(
             id: 7,
@@ -49,8 +49,8 @@ final class CategoryDTOTest extends TestCase
             code: 'root',
             status: CategoryStatusEnum::ACTIVE,
             displayOrder: 1,
-            createdAt: new DateTimeImmutable('2026-01-01 00:00:00 UTC'),
-            updatedAt: new DateTimeImmutable('2026-01-01 00:00:00 UTC'),
+            createdAt: new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo'),
+            updatedAt: new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo'),
             deletedAt: null,
         );
     }
@@ -65,8 +65,8 @@ final class CategoryDTOTest extends TestCase
             code: 'root',
             status: CategoryStatusEnum::ACTIVE,
             displayOrder: 1,
-            createdAt: new DateTimeImmutable('2026-01-01 00:00:00 UTC'),
-            updatedAt: new DateTimeImmutable('2026-01-01 00:00:00 UTC'),
+            createdAt: new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo'),
+            updatedAt: new DateTimeImmutable('2026-01-01 00:00:00 Africa/Cairo'),
             deletedAt: null,
         );
     }

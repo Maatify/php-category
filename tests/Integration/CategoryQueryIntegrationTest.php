@@ -4,22 +4,20 @@ declare(strict_types=1);
 
 namespace Maatify\Category\Tests\Integration;
 
-use Maatify\Category\Command\CreateCategoryCommand;
-use Maatify\Category\Command\CreateCategoryTranslationCommand;
-use Maatify\Category\Command\SoftDeleteCategoryCommand;
-use Maatify\Category\Command\SoftDeleteCategoryTranslationCommand;
-use Maatify\Category\Command\UpdateCategoryStatusCommand;
-use Maatify\Category\Enum\CategoryStatusEnum;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryCommandRepository;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryQueryReader;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryReadQuery;
-use Maatify\Category\Infrastructure\Repository\PdoCategoryTranslationCommandRepository;
-use Maatify\Category\Infrastructure\Transaction\PdoCategoryTransaction;
-use Maatify\Category\Service\CategoryCommandService;
-use Maatify\Category\Service\CategoryQueryService;
+use Maatify\Category\Factory\CategoryFactory;
+use Maatify\Category\Api\CategoryApiInterface;
+use Maatify\Category\Content\Api\Contract\ContentApiInterface;
+use Maatify\Category\Lifecycle\Command\CreateCategoryCommand;
+use Maatify\Category\Content\Mutation\Command\CreateCategoryContentCommand;
+use Maatify\Category\Lifecycle\Command\SoftDeleteCategoryCommand;
+use Maatify\Category\Content\Mutation\Command\SoftDeleteCategoryContentCommand;
+use Maatify\Category\Lifecycle\Command\UpdateCategoryStatusCommand;
+use Maatify\Category\Query\DTO\CategoryVisibleListCriteriaDTO;
+use Maatify\Category\Lifecycle\Enum\CategoryStatusEnum;
+use Maatify\Category\Query\Infrastructure\PdoCategoryQueryReader;
+use Maatify\Category\Query\Infrastructure\PdoCategoryReadQuery;
 use Maatify\Category\Tests\Integration\Support\CategoryMySqlIntegrationTestCase;
 use Maatify\Category\Tests\Integration\Support\FixedCategoryClock;
-use Maatify\Persistence\Pdo\Ordering\ScopedOrderingManager;
 use PDO;
 
 final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCase
@@ -28,6 +26,7 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
     {
         $connection = $this->connection();
         $commandService = $this->commandService($connection);
+        $contentService = $this->contentService($connection);
         $firstId = $commandService->create(new CreateCategoryCommand('root-first'));
         $secondId = $commandService->create(new CreateCategoryCommand('root-second'));
         $thirdId = $commandService->create(new CreateCategoryCommand('root-third'));
@@ -42,8 +41,8 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
         $this->setDisplayOrder($connection, $inactiveId, 3);
         $this->setDisplayOrder($connection, $deletedId, 3);
 
-        $reader = new PdoCategoryReadQuery($connection);
-        $queryService = new CategoryQueryService($reader);
+        $reader = new PdoCategoryReadQuery($connection, new FixedCategoryClock());
+        $queryService = $this->categoryQuery($connection);
 
         self::assertSame($secondId, $queryService->getById($secondId)->id);
         self::assertNull($reader->findVisibleById($inactiveId));
@@ -51,10 +50,92 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
         self::assertSame([$secondId, $thirdId, $firstId], $this->categoryIds($queryService->listRootCategories()));
     }
 
+    public function testConsumerVisibilityListsAreBoundedAndRetainVisibilityOrdering(): void
+    {
+        $connection = $this->connection();
+        $commandService = $this->commandService($connection);
+        $contentService = $this->contentService($connection);
+        $firstRootId = $commandService->create(new CreateCategoryCommand('bounded-root-first'));
+        $secondRootId = $commandService->create(new CreateCategoryCommand('bounded-root-second'));
+        $thirdRootId = $commandService->create(new CreateCategoryCommand('bounded-root-third'));
+        $inactiveRootId = $commandService->create(new CreateCategoryCommand('bounded-root-inactive'));
+        $deletedRootId = $commandService->create(new CreateCategoryCommand('bounded-root-deleted'));
+        $firstChildId = $commandService->create(new CreateCategoryCommand('bounded-child-first', $firstRootId));
+        $secondChildId = $commandService->create(new CreateCategoryCommand('bounded-child-second', $firstRootId));
+        $thirdChildId = $commandService->create(new CreateCategoryCommand('bounded-child-third', $firstRootId));
+        $inactiveChildId = $commandService->create(new CreateCategoryCommand('bounded-child-inactive', $firstRootId));
+        $deletedChildId = $commandService->create(new CreateCategoryCommand('bounded-child-deleted', $firstRootId));
+
+        $contentService->create(
+            new CreateCategoryContentCommand($firstRootId, null, 'Bounded', null),
+        );
+        $contentService->create(
+            new CreateCategoryContentCommand($firstRootId, 'en-US', 'Bounded English', null),
+        );
+        $contentService->create(
+            new CreateCategoryContentCommand($firstRootId, 'ar-EG', 'محدود', null),
+        );
+        $deletedContentId = $contentService->create(
+            new CreateCategoryContentCommand($firstRootId, 'fr-FR', 'Limite', null),
+        );
+
+        $commandService->updateStatus(new UpdateCategoryStatusCommand($inactiveRootId, CategoryStatusEnum::INACTIVE));
+        $commandService->softDelete(new SoftDeleteCategoryCommand($deletedRootId));
+        $commandService->updateStatus(new UpdateCategoryStatusCommand($inactiveChildId, CategoryStatusEnum::INACTIVE));
+        $commandService->softDelete(new SoftDeleteCategoryCommand($deletedChildId));
+        $contentService->softDelete(new SoftDeleteCategoryContentCommand($deletedContentId));
+
+        $this->setDisplayOrder($connection, $firstRootId, 1);
+        $this->setDisplayOrder($connection, $secondRootId, 1);
+        $this->setDisplayOrder($connection, $thirdRootId, 2);
+        $this->setDisplayOrder($connection, $inactiveRootId, 3);
+        $this->setDisplayOrder($connection, $deletedRootId, 3);
+        $this->setDisplayOrder($connection, $firstChildId, 1);
+        $this->setDisplayOrder($connection, $secondChildId, 1);
+        $this->setDisplayOrder($connection, $thirdChildId, 2);
+
+        $queryService = $this->categoryQuery($connection);
+        $bounded = new CategoryVisibleListCriteriaDTO(2);
+        $defaultBound = new CategoryVisibleListCriteriaDTO();
+
+        self::assertSame(
+            [$firstRootId, $secondRootId],
+            $this->categoryIds($queryService->listRootCategories($bounded)),
+        );
+        self::assertSame(
+            [$firstChildId, $secondChildId],
+            $this->categoryIds($queryService->listChildren($firstRootId, $bounded)),
+        );
+        self::assertSame(
+            [null, 'ar-EG'],
+            $this->contentLanguages($contentService->listVisibleForCategory($firstRootId, $bounded)),
+        );
+
+        $visibleRoots = $this->categoryIds($queryService->listRootCategories($defaultBound));
+        self::assertSame([$firstRootId, $secondRootId, $thirdRootId], $visibleRoots);
+        self::assertNotContains($inactiveRootId, $visibleRoots);
+        self::assertNotContains($deletedRootId, $visibleRoots);
+
+        $visibleChildren = $this->categoryIds($queryService->listChildren($firstRootId, $defaultBound));
+        self::assertSame([$firstChildId, $secondChildId, $thirdChildId], $visibleChildren);
+        self::assertNotContains($inactiveChildId, $visibleChildren);
+        self::assertNotContains($deletedChildId, $visibleChildren);
+
+        self::assertSame(
+            [null, 'ar-EG', 'en-US'],
+            $this->contentLanguages($contentService->listVisibleForCategory($firstRootId, $defaultBound)),
+        );
+
+        $commandService->updateStatus(new UpdateCategoryStatusCommand($firstRootId, CategoryStatusEnum::INACTIVE));
+        self::assertSame([], $this->categoryIds($queryService->listChildren($firstRootId, $defaultBound)));
+        self::assertTrue($contentService->listVisibleForCategory($firstRootId, $defaultBound)->isEmpty());
+    }
+
     public function testChildrenAreOrderedAndHiddenWhenAnyAncestorIsInactive(): void
     {
         $connection = $this->connection();
         $commandService = $this->commandService($connection);
+        $contentService = $this->contentService($connection);
         $activeRootId = $commandService->create(new CreateCategoryCommand('active-root'));
         $inactiveRootId = $commandService->create(new CreateCategoryCommand('inactive-root'));
         $firstChildId = $commandService->create(new CreateCategoryCommand('first-child', $activeRootId));
@@ -71,8 +152,8 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
         $this->setDisplayOrder($connection, $inactiveChildId, 3);
         $this->setDisplayOrder($connection, $deletedChildId, 3);
 
-        $reader = new PdoCategoryReadQuery($connection);
-        $queryService = new CategoryQueryService($reader);
+        $reader = new PdoCategoryReadQuery($connection, new FixedCategoryClock());
+        $queryService = $this->categoryQuery($connection);
 
         self::assertSame(
             [$firstChildId, $secondChildId],
@@ -87,53 +168,53 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
         self::assertNull($reader->findVisibleById($grandchildId));
     }
 
-    public function testTranslationsExcludeSoftDeletedRowsAndInvisibleCategoryPaths(): void
+    public function testContentsExcludeSoftDeletedRowsAndInvisibleCategoryPaths(): void
     {
         $connection = $this->connection();
         $commandService = $this->commandService($connection);
+        $contentService = $this->contentService($connection);
         $visibleId = $commandService->create(new CreateCategoryCommand('translated-category'));
         $inactiveId = $commandService->create(new CreateCategoryCommand('translated-inactive'));
         $deletedId = $commandService->create(new CreateCategoryCommand('translated-deleted'));
 
-        $commandService->createTranslation(
-            new CreateCategoryTranslationCommand($visibleId, 'en-US', 'Shirts', null),
+        $contentService->create(
+            new CreateCategoryContentCommand($visibleId, 'en-US', 'Shirts', null),
         );
-        $commandService->createTranslation(
-            new CreateCategoryTranslationCommand($visibleId, 'ar-EG', 'قمصان', 'وصف'),
+        $contentService->create(
+            new CreateCategoryContentCommand($visibleId, 'ar-EG', 'قمصان', 'وصف'),
         );
-        $deletedVisibleTranslationId = $commandService->createTranslation(
-            new CreateCategoryTranslationCommand($visibleId, 'fr-FR', 'Chemises', null),
+        $deletedVisibleContentId = $contentService->create(
+            new CreateCategoryContentCommand($visibleId, 'fr-FR', 'Chemises', null),
         );
-        $commandService->createTranslation(
-            new CreateCategoryTranslationCommand($inactiveId, 'en-US', 'Inactive', null),
+        $contentService->create(
+            new CreateCategoryContentCommand($inactiveId, 'en-US', 'Inactive', null),
         );
-        $deletedCategoryTranslationId = $commandService->createTranslation(
-            new CreateCategoryTranslationCommand($deletedId, 'en-US', 'Deleted', null),
+        $deletedCategoryContentId = $contentService->create(
+            new CreateCategoryContentCommand($deletedId, 'en-US', 'Deleted', null),
         );
 
         $commandService->updateStatus(new UpdateCategoryStatusCommand($inactiveId, CategoryStatusEnum::INACTIVE));
         $commandService->softDelete(new SoftDeleteCategoryCommand($deletedId));
-        $commandService->softDeleteTranslation(
-            new SoftDeleteCategoryTranslationCommand($deletedVisibleTranslationId),
+        $contentService->softDelete(
+            new SoftDeleteCategoryContentCommand($deletedVisibleContentId),
         );
-        $commandService->softDeleteTranslation(
-            new SoftDeleteCategoryTranslationCommand($deletedCategoryTranslationId),
+        $contentService->softDelete(
+            new SoftDeleteCategoryContentCommand($deletedCategoryContentId),
         );
 
-        $queryService = new CategoryQueryService(new PdoCategoryReadQuery($connection));
-        $visibleTranslations = $queryService->listTranslations($visibleId);
+        $visibleContents = $contentService->listVisibleForCategory($visibleId);
         $languages = [];
-        foreach ($visibleTranslations as $translation) {
-            $languages[] = $translation->languageCode;
+        foreach ($visibleContents as $content) {
+            $languages[] = $content->languageCode;
         }
 
         self::assertSame(['ar-EG', 'en-US'], $languages);
-        self::assertTrue($queryService->listTranslations($inactiveId)->isEmpty());
-        self::assertTrue($queryService->listTranslations($deletedId)->isEmpty());
+        self::assertTrue($contentService->listVisibleForCategory($inactiveId)->isEmpty());
+        self::assertTrue($contentService->listVisibleForCategory($deletedId)->isEmpty());
     }
 
     /** @return list<int> */
-    private function categoryIds(\Maatify\Category\DTO\CategoryCollectionDTO $categories): array
+    private function categoryIds(\Maatify\Category\Query\DTO\CategoryCollectionDTO $categories): array
     {
         $ids = [];
         foreach ($categories as $category) {
@@ -143,15 +224,39 @@ final class CategoryQueryIntegrationTest extends CategoryMySqlIntegrationTestCas
         return $ids;
     }
 
-    private function commandService(PDO $connection): CategoryCommandService
+    /** @return list<?string> */
+    private function contentLanguages(\Maatify\Category\Content\Query\DTO\CategoryContentCollectionDTO $contents): array
     {
-        return new CategoryCommandService(
-            new PdoCategoryCommandRepository($connection, new ScopedOrderingManager()),
-            new PdoCategoryQueryReader($connection),
-            new PdoCategoryTranslationCommandRepository($connection),
-            new PdoCategoryTransaction($connection),
-            new FixedCategoryClock('2026-01-01 00:00:00 UTC'),
-        );
+        $languages = [];
+        foreach ($contents as $content) {
+            $languages[] = $content->languageCode;
+        }
+
+        return $languages;
+    }
+
+    private function commandService(PDO $connection): CategoryApiInterface
+    {
+        return CategoryFactory::create(
+            $connection,
+            new FixedCategoryClock('2026-01-01 00:00:00 Africa/Cairo'),
+        )->categories();
+    }
+
+    private function contentService(PDO $connection): ContentApiInterface
+    {
+        return CategoryFactory::create(
+            $connection,
+            new FixedCategoryClock('2026-01-01 00:00:00 Africa/Cairo'),
+        )->contents();
+    }
+
+    private function categoryQuery(PDO $connection): CategoryApiInterface
+    {
+        return CategoryFactory::create(
+            $connection,
+            new FixedCategoryClock('2026-01-01 00:00:00 Africa/Cairo'),
+        )->categories();
     }
 
     private function setDisplayOrder(PDO $connection, int $categoryId, int $displayOrder): void

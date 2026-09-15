@@ -12,7 +12,7 @@ final class FixedCategoryClock implements ClockInterface
 {
     private DateTimeImmutable $now;
 
-    public function __construct(string $value = '2026-01-03 00:00:00 UTC')
+    public function __construct(string $value = '2026-01-03 00:00:00 Africa/Cairo')
     {
         $this->now = new DateTimeImmutable($value);
     }
